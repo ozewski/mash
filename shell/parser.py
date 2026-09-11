@@ -1,7 +1,7 @@
 import shlex
 
 def tokenize(command: str) -> list[str]:
-    lexer = shlex.shlex(command, posix=True, punctuation_chars="|<>")
+    lexer = shlex.shlex(command, posix=True, punctuation_chars="|<>&")
     lexer.whitespace_split = True
     lexer.commenters = ""
 
