@@ -2,7 +2,16 @@
 
 A minimal shell implemented in Python.
 
-**Features:**
+## Installation
+
+If using this shell on Windows, WSL must be installed.
+
+```
+git clone https://github.com/ozewski/mash.git
+python3 mash/run.py
+```
+
+## Features
 * Executing programs with arguments
 * Certain shell builtins (cd, exit, export?, history?)
 * I/O redirection (< and >)
