@@ -1,16 +1,25 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Union
 
 class RedirectOp(Enum):
     READ = "<"
-    # TODO: implement other operations
+    WRITE_TRUNC = ">"
+    WRITE_APPEND = ">>"
 
 @dataclass
-class Redirection:
-    # for I/O redirections
-    fd: int         # could be stdin/stdout/stderr or a custom fd
-    op: RedirectOp  # based on syntax of operator
-    target: str
+class FileRedirection:
+    # for I/O redirections on files
+    fd: int         # descriptor (bare syntax: in case of read, this is stdout [1]; for write, this is stdin [0])
+    op: RedirectOp  # based on syntax
+    path: str       # where is it going? (file path)
+
+@dataclass
+class FdDuplication:
+    fd: int        # descriptor (typically stdout [1] or stderr [2] )
+    target: int    # where is it going? (a common use: fd=2, target=1 [redirect stderr to stdout])
+
+Redirection = Union[FileRedirection, FdDuplication]
 
 @dataclass
 class Command:
