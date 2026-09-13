@@ -10,7 +10,7 @@ class RedirectOp(Enum):
 @dataclass
 class FileRedirection:
     # for I/O redirections on files
-    fd: int         # descriptor (bare syntax: in case of read, this is stdout [1]; for write, this is stdin [0])
+    fd: int         # descriptor (bare syntax: in case of read, this is stdin [0]; for write, this is stdout [1])
     op: RedirectOp  # based on syntax
     path: str       # where is it going? (file path)
 
@@ -26,3 +26,7 @@ class Command:
     program: str
     args: list[str] = field(default_factory=list)
     redirections: list[Redirection] = field(default_factory=list)
+
+@dataclass
+class Pipeline:
+    commands: list[Command]
