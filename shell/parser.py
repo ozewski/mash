@@ -9,7 +9,7 @@ General rules for parsing symbols:
 2. If a bare write operator is given (> or >> rather than n> or n>>), n=1 [stdout] by default.
 3. If a read or write operator is given, immediately followed by an & symbol, this is to be parsed as a FdDuplication.
     a. The & symbol must be followed by a number token, indicating the dup target.
-    b. Duplications are always write operations (default n=1 [stdout]).
+    b. Duplications follow read/write default n values based on the according direction of the arrow.
 4. Otherwise, with no & symbol, the operation is to be parsed as a FileRedirection.
 """
 
@@ -19,8 +19,10 @@ class ParseError(Exception):
 
 # Parser helpers
 
+safe_or = lambda x, y: y if x is None else x
+
 def is_operator(token: str) -> bool:
-    return token in [">", ">>", "<", ">&"]
+    return token in [">", ">>", "<", ">&", "<&"]
 
 def is_number(token: str) -> bool:
     return token.isascii() and token.isdigit()
@@ -57,6 +59,7 @@ def parse(tokens: list[str]) -> Pipeline:
             new_command = Command(program=next_token(tokens, i))
             pipeline.append(new_command)
 
+            fd_arg = None
             i += 2
             continue
 
@@ -83,15 +86,21 @@ def parse(tokens: list[str]) -> Pipeline:
             # operator token
             next = next_token(tokens, i)
 
-            if token == ">&":
+            if token in (">&", "<&"):
                 # duplication; requires number following
                 if not is_number(next):
                     raise ParseError("Dup target is not a fd")
                 
                 target = int(next)
-                dup = FdDuplication(fd=(fd_arg or 1), target=target)
+                fd = safe_or(
+                    fd_arg,
+                    1 if token == ">&" else 0
+                )
+
+                dup = FdDuplication(fd=fd, target=target)
                 command.redirections.append(dup)
 
+                fd_arg = None
                 i += 2
                 continue
 
@@ -102,13 +111,13 @@ def parse(tokens: list[str]) -> Pipeline:
 
                 match token:
                     case "<":
-                        fd = fd_arg or 0
+                        fd = safe_or(fd_arg, 0)
                         op = RedirectOp.READ
                     case ">":
-                        fd = fd_arg or 1
+                        fd = safe_or(fd_arg, 1)
                         op = RedirectOp.WRITE_TRUNC
                     case ">>":
-                        fd = fd_arg or 1
+                        fd = safe_or(fd_arg, 1)
                         op = RedirectOp.WRITE_APPEND
 
                 redirection = FileRedirection(
@@ -118,7 +127,8 @@ def parse(tokens: list[str]) -> Pipeline:
                 )
 
                 command.redirections.append(redirection)
-                
+
+                fd_arg = None
                 i += 2
                 continue
 
