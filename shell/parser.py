@@ -13,6 +13,9 @@ General rules for parsing symbols:
 4. Otherwise, with no & symbol, the operation is to be parsed as a FileRedirection.
 """
 
+class ParseError(Exception):
+    pass
+
 # Parser helpers
 
 def is_operator(token: str) -> bool:
@@ -23,18 +26,18 @@ def is_number(token: str) -> bool:
 
 def next_token(tokens: list[str], i: int) -> str:
     # searches for the next token
-    # if it doesn't exist, throws ValueError
+    # if it doesn't exist, throws ParseError
 
-    if i < len(tokens):
-        return tokens[i]
+    if i < len(tokens) - 1:
+        return tokens[i + 1]
     else:
-        raise ValueError("Expected more arguments")
+        raise ParseError("Expected more arguments")
 
 def next_token_safe(tokens: list[str], i: int) -> str | None:
     # like next_token, but safely returns None instead of throwing error
 
-    if i < len(tokens):
-        return tokens[i]
+    if i < len(tokens) - 1:
+        return tokens[i + 1]
     else:
         return None
 
@@ -82,10 +85,10 @@ def parse(tokens: list[str]) -> Pipeline:
             # operator token
             next = next_token(tokens, i)
 
-            if token == "&>":
+            if token == ">&":
                 # duplication; requires number following
                 if not is_number(next):
-                    raise ValueError("Dup requires following argument to be a fd")
+                    raise ParseError("Dup target is not a fd")
                 
                 target = int(next)
                 dup = FdDuplication(fd=(fd_arg or 1), target=target)
