@@ -32,4 +32,4 @@ def get_prompt() -> str:
     hostname = get_hostname()
     cwd = get_abbreviated_cwd()
 
-    return f"{colors.CYAN}{username}{colors.RESET}@{colors.YELLOW}{hostname}{colors.RESET} {cwd}> "
+    return f"{colors.CYAN}{username}{colors.RESET}@{colors.YELLOW}{hostname}{colors.RESET} {colors.BRIGHT_BLACK}{cwd}{colors.RESET}> "
