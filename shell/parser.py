@@ -14,6 +14,7 @@ General rules for parsing symbols:
 """
 
 class ParseError(Exception):
+    """Raised when malformed input syntax prevents complete command parsing."""
     pass
 
 # Parser helpers
@@ -32,14 +33,6 @@ def next_token(tokens: list[str], i: int) -> str:
         return tokens[i + 1]
     else:
         raise ParseError("Expected more arguments")
-
-def next_token_safe(tokens: list[str], i: int) -> str | None:
-    # like next_token, but safely returns None instead of throwing error
-
-    if i < len(tokens) - 1:
-        return tokens[i + 1]
-    else:
-        return None
 
 # End parser helpers
 
@@ -69,9 +62,14 @@ def parse(tokens: list[str]) -> Pipeline:
 
         elif is_number(token):
             # numeric token
-            next = next_token_safe(tokens, i)
+            try:
+                next = next_token(tokens, i)
+            except ParseError:
+                # we're at the end of the command: this can't be part of an operator
+                command.args.append(token)
+                break;
 
-            if type(next) is str and is_operator(next):
+            if is_operator(next):
                 # part of an operator; save this value
                 fd_arg = int(token)
             else:

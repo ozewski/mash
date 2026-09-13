@@ -27,6 +27,10 @@ class Command:
     args: list[str] = field(default_factory=list)
     redirections: list[Redirection] = field(default_factory=list)
 
+    @property
+    def argv(self) -> list[str]:
+        return [self.program, *self.args]
+
 @dataclass
 class Pipeline:
     commands: list[Command]
