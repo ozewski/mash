@@ -21,7 +21,7 @@ class ParseError(Exception):
 
 safe_or = lambda x, y: y if x is None else x
 
-def is_operator(token: str) -> bool:
+def is_io_operator(token: str) -> bool:
     return token in [">", ">>", "<", ">&", "<&"]
 
 def is_number(token: str) -> bool:
@@ -72,7 +72,7 @@ def parse(tokens: list[str]) -> Pipeline:
                 command.args.append(token)
                 break;
 
-            if is_operator(next):
+            if is_io_operator(next):
                 # part of an operator; save this value
                 fd_arg = int(token)
             else:
@@ -82,7 +82,7 @@ def parse(tokens: list[str]) -> Pipeline:
             i += 1
             continue
 
-        elif is_operator(token):
+        elif is_io_operator(token):
             # operator token
             next = next_token(tokens, i)
 
@@ -140,3 +140,12 @@ def parse(tokens: list[str]) -> Pipeline:
             continue
 
     return Pipeline(commands=pipeline)
+
+def parse_command(line: str) -> Pipeline:
+    """Parses a MASH command into a runnable Pipeline."""
+    try:
+        tokens = tokenize(line)
+    except ValueError as e:
+        raise ParseError("Could not parse command") from e
+
+    return parse(tokens)
