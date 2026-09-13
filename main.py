@@ -1,11 +1,22 @@
 import platform
 import readline
 import sys
+
+from datetime import datetime, timezone
 from pprint import pprint
+
+from shell.cli import get_prompt
 from shell.parser import parse_command, ParseError
 
-print(platform.release())
-print(platform.version())
+VERSION = "0.1.0"
+
+utc_now = datetime.now(timezone.utc)
+using_wsl = "wsl" in platform.release().lower()
+
+print(f"\nmash: minimal application shell [v{VERSION}]")
+if using_wsl:
+    print("mash: running in WSL mode")
+
 print()
 
 while True:
@@ -13,7 +24,7 @@ while True:
     pipeline = None
 
     try:
-        command = input("> ").strip()
+        command = input(get_prompt()).strip()
         if not command:
             continue
     except KeyboardInterrupt:
