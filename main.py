@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pprint import pprint
 
 from shell.cli import get_prompt
+from shell.colors import colors
 from shell.parser import parse_command, ParseError
 
 VERSION = "0.1.0"
@@ -44,3 +45,4 @@ while True:
     if pipeline:
         pprint(pipeline)
 
+print(colors.RESET)
