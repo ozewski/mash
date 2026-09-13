@@ -1,6 +1,6 @@
 import shlex
 
-from shell.command import Command, FdDuplication, FileRedirection, Pipeline
+from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp
 
 """
 General rules for parsing symbols:
@@ -13,17 +13,38 @@ General rules for parsing symbols:
 4. Otherwise, with no & symbol, the operation is to be parsed as a FileRedirection.
 """
 
+# Parser helpers
+
+def is_operator(token: str) -> bool:
+    return token in [">", ">>", "<", ">&"]
+
+def is_number(token: str) -> bool:
+    return token.isascii() and token.isdigit()
+
+def next_token(tokens: list[str], i: int) -> str:
+    # searches for the next token
+    # if it doesn't exist, throws ValueError
+
+    if i < len(tokens):
+        return tokens[i]
+    else:
+        raise ValueError("Expected more arguments")
+
+def next_token_safe(tokens: list[str], i: int) -> str | None:
+    # like next_token, but safely returns None instead of throwing error
+
+    if i < len(tokens):
+        return tokens[i]
+    else:
+        return None
+
+# End parser helpers
+
 def tokenize(command: str) -> list[str]:
     lexer = shlex.shlex(command, posix=True, punctuation_chars="|<>&")
     lexer.whitespace_split = True
     lexer.commenters = ""
     return list(lexer)
-
-def _is_operator(token: str):
-    return token in [">", ">>", "<", ">&"]
-
-def _is_number(token: str):
-    return token.isascii() and token.isdigit()
 
 def parse(tokens: list[str]) -> Pipeline:
     pipeline = [Command(program=tokens[0])]
@@ -37,15 +58,17 @@ def parse(tokens: list[str]) -> Pipeline:
         if token == "|":
             # pipe token
             # stop processing current command and create new command in pipeline
-            new_command = Command(program=tokens[i+1])
+            new_command = Command(program=next_token(tokens, i))
             pipeline.append(new_command)
 
             i += 2
             continue
 
-        elif _is_number(token):
+        elif is_number(token):
             # numeric token
-            if _is_operator(tokens[i + 1]):
+            next = next_token_safe(tokens, i)
+
+            if type(next) is str and is_operator(next):
                 # part of an operator; save this value
                 fd_arg = int(token)
             else:
@@ -55,14 +78,16 @@ def parse(tokens: list[str]) -> Pipeline:
             i += 1
             continue
 
-        elif _is_operator(token):
+        elif is_operator(token):
             # operator token
+            next = next_token(tokens, i)
+
             if token == "&>":
                 # duplication; requires number following
-                if not _is_number(tokens[i+1]):
+                if not is_number(next):
                     raise ValueError("Dup requires following argument to be a fd")
                 
-                target = int(tokens[i+1])
+                target = int(next)
                 dup = FdDuplication(fd=(fd_arg or 1), target=target)
                 command.redirections.append(dup)
 
@@ -70,8 +95,31 @@ def parse(tokens: list[str]) -> Pipeline:
                 continue
 
             else:
+                # redirection
+                fd = 0
+                op = RedirectOp.READ
 
-                i += 1
+                match token:
+                    case "<":
+                        fd = fd_arg or 0
+                        op = RedirectOp.READ
+                    case ">":
+                        fd = fd_arg or 1
+                        op = RedirectOp.WRITE_TRUNC
+                    case ">>":
+                        fd = fd_arg or 1
+                        op = RedirectOp.WRITE_APPEND
+
+                redirection = FileRedirection(
+                    fd=fd, 
+                    op=op, 
+                    path=next
+                )
+
+                command.redirections.append(redirection)
+                
+                i += 2
+                continue
 
         else:
             # all other valid tokens
@@ -80,4 +128,4 @@ def parse(tokens: list[str]) -> Pipeline:
             i += 1
             continue
 
-    return Pipeline(commands=pipeline) # TODO
+    return Pipeline(commands=pipeline)
