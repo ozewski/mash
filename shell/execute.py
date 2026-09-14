@@ -5,7 +5,7 @@ from shell.command import Pipeline
 class ExecutionError(Exception):
     """Raised when the execution of a pipeline fails."""
 
-def execute_pipeline(pipeline: Pipeline) -> tuple[int, int]:
+def execute_pipeline(pipeline: Pipeline) -> int:
     if len(pipeline.commands) > 1:
         raise ExecutionError("multi-stage pipelines not yet supported")
 
@@ -32,5 +32,7 @@ def execute_pipeline(pipeline: Pipeline) -> tuple[int, int]:
                 
         else:
             # parent process
-            finished_pid, status = os.waitpid(pid, 0)
-            return finished_pid, os.waitstatus_to_exitcode(status)
+            _, status = os.waitpid(pid, 0)
+            return os.waitstatus_to_exitcode(status)
+
+    return -1

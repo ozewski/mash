@@ -44,7 +44,7 @@ while True:
 
         if pipeline:
             try:
-                finished_pid, status = execute_pipeline(pipeline)
+                status = execute_pipeline(pipeline)
                 if status == 127:
                     # file not found
                     print(f"mash: file not found", file=sys.stderr)
