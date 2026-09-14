@@ -15,7 +15,6 @@ General rules for parsing symbols:
 
 class ParseError(Exception):
     """Raised when malformed input syntax prevents complete command parsing."""
-    pass
 
 # Parser helpers
 
