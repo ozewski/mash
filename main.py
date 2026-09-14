@@ -7,7 +7,7 @@ from pprint import pprint
 
 from shell.cli import get_prompt
 from shell.colors import colors
-from shell.execute import ExecutionError
+from shell.execute import execute_pipeline, ExecutionError
 from shell.parser import parse_command, ParseError
 
 VERSION = "0.1.0"
@@ -37,15 +37,24 @@ while True:
         break
 
     try:
-        pipeline = parse_command(command)
-    except ParseError as e:
-        print(f"mash: syntax error: {e}", file=sys.stderr)
-    except ExecutionError as e:
-        print(f"mash: execution error: {e}", file=sys.stderr)
+        try:
+            pipeline = parse_command(command)
+        except ParseError as e:
+            print(f"mash: syntax error: {e}", file=sys.stderr)
+
+        if pipeline:
+            try:
+                finished_pid, status = execute_pipeline(pipeline)
+                if status == 127:
+                    # file not found
+                    print(f"mash: file not found", file=sys.stderr)
+                elif status == 126:
+                    # no permission
+                    print(f"mash: no permission", file=sys.stderr)
+            except ExecutionError as e:
+                print(f"mash: execution error: {e}", file=sys.stderr)
+
     except Exception as e:
         print(f"mash: unexpected error: {e}", file=sys.stderr)
-
-    if pipeline:
-        pprint(pipeline)
 
 print(colors.RESET)
