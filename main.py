@@ -7,6 +7,7 @@ from pprint import pprint
 
 from shell.cli import get_prompt
 from shell.colors import colors
+from shell.execute import ExecutionError
 from shell.parser import parse_command, ParseError
 
 VERSION = "0.1.0"
@@ -39,6 +40,8 @@ while True:
         pipeline = parse_command(command)
     except ParseError as e:
         print(f"mash: syntax error: {e}", file=sys.stderr)
+    except ExecutionError as e:
+        print(f"mash: execution error: {e}", file=sys.stderr)
     except Exception as e:
         print(f"mash: unexpected error: {e}", file=sys.stderr)
 

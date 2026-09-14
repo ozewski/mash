@@ -33,7 +33,7 @@ def next_token(tokens: list[str], i: int) -> str:
     if i < len(tokens) - 1:
         return tokens[i + 1]
     else:
-        raise ParseError("Expected more arguments")
+        raise ParseError("expected more arguments")
 
 # End parser helpers
 
@@ -88,7 +88,7 @@ def parse(tokens: list[str]) -> Pipeline:
             if token in (">&", "<&"):
                 # duplication; requires number following
                 if not is_number(next):
-                    raise ParseError("Dup target is not a fd")
+                    raise ParseError("dup target is not a fd")
                 
                 target = int(next)
                 fd = safe_or(
@@ -145,6 +145,6 @@ def parse_command(line: str) -> Pipeline:
     try:
         tokens = tokenize(line)
     except ValueError as e:
-        raise ParseError("Could not parse command") from e
+        raise ParseError("could not parse command") from e
 
     return parse(tokens)
