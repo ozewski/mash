@@ -13,6 +13,7 @@ def cd(*args):
 
     if not args:
         # change to home directory
+        return 0
         pass
     
     path = args[0]
@@ -37,7 +38,5 @@ def cd(*args):
             print(f"mash: cd: {path}: no such file or directory", file=sys.stderr)
             return 1
     
-
-
 def exit(*args):
     pass

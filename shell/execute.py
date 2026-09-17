@@ -1,6 +1,12 @@
 import os
 
 from shell.command import Pipeline
+from shell.defaults import cd as mash_cd, exit as mash_exit
+
+DEFAULT_COMMANDS = {
+    "cd": mash_cd,
+    "exit": mash_exit
+}
 
 class ExecutionError(Exception):
     """Raised when the execution of a pipeline fails."""
@@ -13,6 +19,9 @@ def execute_pipeline(pipeline: Pipeline) -> int:
         raise ExecutionError("I/O redirections not yet supported")
     
     for command in pipeline.commands:
+        if command.program in DEFAULT_COMMANDS:
+            return DEFAULT_COMMANDS[command.program]()
+
         try:
             pid = os.fork()
         except OSError as e:
