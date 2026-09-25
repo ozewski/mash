@@ -20,4 +20,7 @@ python3 mash/run.py
 * Command history
 * Job control (CTRL+C at least, maybe CTRL+Z, fg, bg)
 
+Known issues:
+* `run.py` is not executable on Linux.
+
 This shell was created as my final project for COSC 519 (Operating Systems) at Towson University, under the direction of Dr. Nicholas Phillips.
