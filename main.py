@@ -21,32 +21,36 @@ if using_wsl:
 
 print()
 
-while True:
-    # TODO: add custom shell prompt with colors
-    pipeline = None
+try:
+    while True:
+        # TODO: add custom shell prompt with colors
+        pipeline = None
 
-    try:
-        command = input(get_prompt()).strip()
-        if not command:
-            continue
-    except KeyboardInterrupt:
-        print("^C")
-        continue
-    except EOFError:
-        print("\nmash: exiting gracefully...\n" + colors.RESET)
-        break
-
-    try:
         try:
-            pipeline = parse_command(command)
-        except ParseError as e:
-            print(f"mash: syntax error: {e}", file=sys.stderr)
+            command = input(get_prompt()).strip()
+            if not command:
+                continue
+        except KeyboardInterrupt:
+            print("^C")
+            continue
+        except EOFError:
+            print("^D")
+            break
 
-        if pipeline:
+        try:
             try:
-                execute_pipeline(pipeline)
-            except ExecutionError as e:
-                print(f"mash: execution error: {e}", file=sys.stderr)
+                pipeline = parse_command(command)
+            except ParseError as e:
+                print(f"mash: syntax error: {e}", file=sys.stderr)
 
-    except Exception as e:
-        print(f"mash: unexpected error: {e}", file=sys.stderr)
+            if pipeline:
+                try:
+                    execute_pipeline(pipeline)
+                except ExecutionError as e:
+                    print(f"mash: execution error: {e}", file=sys.stderr)
+
+        except Exception as e:
+            print(f"mash: unexpected error: {e}", file=sys.stderr)
+
+finally:
+    print("\nmash: exiting gracefully...\n" + colors.RESET)

@@ -59,5 +59,4 @@ def exit(*args):
             print(f"mash: exit: {args[0]}: numeric argument required", file=sys.stderr)
             return 1
 
-    print("mash: exiting gracefully...\n" + colors.RESET)
     sys.exit(exit_code)

@@ -14,6 +14,15 @@ def _wait_status(status: int):
     code = os.waitstatus_to_exitcode(status)
     return 128 - code if code < 0 else code
 
+def _close_all(fds: list[int]) -> None:
+    # try to close as many fds as possible
+    # helper utility to prevent fd leaks in pipelines
+    for fd in fds:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+
 def _report(msg: str) -> None:
     # use low-level os.write to prevent issues with buffered output
     # this is used in the child process after a fork
@@ -107,34 +116,38 @@ def execute_pipeline(pipeline: Pipeline) -> int:
     pipes: list[tuple[int, int]] = []  # all pipes created by OS
     pids: list[int] = []  # all PIDs (stages of pipeline) that we have run so far
 
-    for _ in range(n - 1):
-        r, w = os.pipe()
-        pipes.append((r, w))
-        pipe_fds += [r, w]
+    try:
+        for _ in range(n - 1):
+            r, w = os.pipe()
+            pipes.append((r, w))
+            pipe_fds += [r, w]
 
-    print(pipe_fds)
-    print(pipes)
-    print(pids)
-    
-    for i, command in enumerate(pipeline.commands):
-        # select appropriate stdin and stdout for this command in the pipeline
-        # if we're at the beginning or end, either stdin or stdout is None
-        # meaning the child will inherit the shell's stdin or stdout
-        stdin_fd = pipes[i - 1][0] if i > 0 else None
-        stdout_fd = pipes[i][1] if i < n - 1 else None
+        print(pipe_fds)
+        print(pipes)
+        print(pids)
         
-        try:
-            pid = os.fork()
-        except OSError as e:
-            raise ExecutionError("failed to create new process") from e
+        for i, command in enumerate(pipeline.commands):
+            # select appropriate stdin and stdout for this command in the pipeline
+            # if we're at the beginning or end, either stdin or stdout is None
+            # meaning the child will inherit the shell's stdin or stdout
+            stdin_fd = pipes[i - 1][0] if i > 0 else None
+            stdout_fd = pipes[i][1] if i < n - 1 else None
+            
+            try:
+                pid = os.fork()
+            except OSError as e:
+                raise ExecutionError("failed to create new process") from e
 
-        if pid == 0:
-            # child process
-            run_in_child(command, stdin_fd, stdout_fd, pipe_fds)
-        else:
-            # parent process
-            # track the PID of the child
-            pids.append(pid)
+            if pid == 0:
+                # child process
+                run_in_child(command, stdin_fd, stdout_fd, pipe_fds)
+            else:
+                # parent process
+                # track the PID of the child
+                pids.append(pid)
+    finally:
+        # guaranteed resource cleanup: close all pipe fds in the parent process
+        _close_all(pipe_fds)
 
     # wait for EVERY process in the pipeline to finish, and return the exit status of the last one
     statuses = [os.waitpid(pid, 0)[1] for pid in pids]
