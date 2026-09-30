@@ -1,6 +1,6 @@
 import os
 
-from shell.command import FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
+from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
 from shell.defaults import cd as mash_cd, exit as mash_exit
 
 DEFAULT_COMMANDS = {
@@ -8,7 +8,8 @@ DEFAULT_COMMANDS = {
     "exit": mash_exit
 }
 
-def _wait_status(status: int) -> int:
+def _wait_status(status: int):
+    # normalizes exit status to a positive integer
     code = os.waitstatus_to_exitcode(status)
     return 128 - code if code < 0 else code
 
@@ -55,8 +56,33 @@ def apply_redirections(redirections: list[Redirection]):
             try:
                 os.dup2(redir.target, redir.fd)
             except OSError as e:
-                raise RedirectionError(f"{redir.target}: {e.strerror}") from e
+                raise RedirectionError(f"{redir.target}: {e.strerror}") from e\
 
+def run_in_child(command: Command):
+    # runs in the newly created child process after a fork
+    try:
+        try:
+            apply_redirections(command.redirections)
+        except RedirectionError as e:
+            _report(str(e))
+            os._exit(1)
+
+        try:
+            os.execvp(command.program, command.argv)
+        except FileNotFoundError:
+            _report(f"{command.program}: command not found")
+            os._exit(127)
+        except PermissionError:
+            _report(f"{command.program}: permission denied")
+            os._exit(126)
+        except OSError as e:
+            _report(f"{command.program}: {e.strerror}")
+            os._exit(1)
+
+    except BaseException as e:
+        _report(f"internal error: {e}")
+    finally:
+        os._exit(1)
 
 def execute_pipeline(pipeline: Pipeline) -> int:
     if len(pipeline.commands) > 1:
@@ -75,30 +101,7 @@ def execute_pipeline(pipeline: Pipeline) -> int:
 
         if pid == 0:
             # child process
-            try:
-                try:
-                    apply_redirections(command.redirections)
-                except RedirectionError as e:
-                    _report(str(e))
-                    os._exit(1)
-
-                try:
-                    os.execvp(command.program, command.argv)
-                except FileNotFoundError:
-                    _report(f"{command.program}: command not found")
-                    os._exit(127)
-                except PermissionError:
-                    _report(f"{command.program}: permission denied")
-                    os._exit(126)
-                except OSError as e:
-                    _report(f"{command.program}: {e.strerror}")
-                    os._exit(1)
-
-            except BaseException as e:
-                _report(f"internal error: {e}")
-            finally:
-                os._exit(1)
-    
+            run_in_child(command)
         else:
             # parent process
             _, status = os.waitpid(pid, 0)
