@@ -146,10 +146,6 @@ def execute_pipeline(pipeline: Pipeline) -> int:
 
             pipes.append((r, w))
             pipe_fds += [r, w]
-
-        print(pipe_fds)
-        print(pipes)
-        print(pids)
         
         for i, command in enumerate(pipeline.commands):
             # select appropriate stdin and stdout for this command in the pipeline
