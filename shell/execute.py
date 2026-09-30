@@ -8,6 +8,10 @@ DEFAULT_COMMANDS = {
     "exit": mash_exit
 }
 
+def _wait_status(status: int) -> int:
+    code = os.waitstatus_to_exitcode(status)
+    return 128 - code if code < 0 else code
+
 def _report(msg: str) -> None:
     # use low-level os.write to prevent issues with buffered output
     # this is used in the child process after a fork
@@ -60,6 +64,8 @@ def execute_pipeline(pipeline: Pipeline) -> int:
     
     for command in pipeline.commands:
         if command.program in DEFAULT_COMMANDS:
+            if command.redirections:
+                raise ExecutionError(f"{command.program}: redirections on builtins not yet supported")
             return DEFAULT_COMMANDS[command.program](*command.args)
 
         try:
@@ -96,6 +102,6 @@ def execute_pipeline(pipeline: Pipeline) -> int:
         else:
             # parent process
             _, status = os.waitpid(pid, 0)
-            return os.waitstatus_to_exitcode(status)
+            return _wait_status(status)
 
     return -1
