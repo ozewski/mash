@@ -92,6 +92,15 @@ def run_in_child(command: Command, stdin_fd: int | None, stdout_fd: int | None, 
             _report(str(e))
             os._exit(1)
 
+        # intercept built-ins to run them in the child process
+        if command.program in DEFAULT_COMMANDS:
+            status = DEFAULT_COMMANDS[command.program](*command.args)
+            # since built-ins use python printing, must flush stdout and stderr before exiting
+            sys.stdout.flush()
+            sys.stderr.flush()
+            os._exit(status)
+
+        # otherwise, replace process with the requested program
         try:
             os.execvp(command.program, command.argv)
         except FileNotFoundError:
@@ -110,9 +119,6 @@ def run_in_child(command: Command, stdin_fd: int | None, stdout_fd: int | None, 
         os._exit(1)
 
 def execute_pipeline(pipeline: Pipeline) -> int:
-    if len(pipeline.commands) > 1:
-        raise ExecutionError("multi-stage pipelines not yet supported")
-
     if len(pipeline.commands) == 1 and pipeline.commands[0].program in DEFAULT_COMMANDS:
         # handle a single built-in command directly in the shell process
         command = pipeline.commands[0]
@@ -164,9 +170,11 @@ def execute_pipeline(pipeline: Pipeline) -> int:
                 # parent process
                 # track the PID of the child
                 pids.append(pid)
-    except ExecutionError as e:
+            
+    except BaseException as e:
         # we save the error so that we can proceed and wait on the rest of the pipeline
         pipeline_error = e
+
     finally:
         # guaranteed resource cleanup: close all pipe fds in the parent process
         _close_all(pipe_fds)
