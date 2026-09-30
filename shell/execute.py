@@ -1,4 +1,5 @@
 import os
+import sys
 
 from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
 from shell.defaults import cd as mash_cd, exit as mash_exit
@@ -58,7 +59,7 @@ def apply_redirections(redirections: list[Redirection]):
             except OSError as e:
                 raise RedirectionError(f"{redir.target}: {e.strerror}") from e\
 
-def run_in_child(command: Command):
+def run_in_child(command: Command, stdin_fd: int, stdout_fd: int, pipe_fds: list[tuple[int, int]]):
     # runs in the newly created child process after a fork
     try:
         try:
@@ -87,13 +88,25 @@ def run_in_child(command: Command):
 def execute_pipeline(pipeline: Pipeline) -> int:
     if len(pipeline.commands) > 1:
         raise ExecutionError("multi-stage pipelines not yet supported")
+
+    if len(pipeline.commands) == 1 and pipeline.commands[0].program in DEFAULT_COMMANDS:
+        # handle a single built-in command directly in the shell process
+        command = pipeline.commands[0]
+        if command.redirections:
+            raise ExecutionError(f"{command.program}: redirections on builtins not yet supported")
+        return DEFAULT_COMMANDS[command.program](*command.args)
+
+    # perform flushing before forking to avoid duplicate output in the child process
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    # set up variables to track pipeline information
+    n = len(pipeline.commands)
+    pipe_fds: list[int] = []     # flat list of every fd we've created
+    pipes: list[tuple[int, int]] = []
+    pids: list[int] = []
     
     for command in pipeline.commands:
-        if command.program in DEFAULT_COMMANDS:
-            if command.redirections:
-                raise ExecutionError(f"{command.program}: redirections on builtins not yet supported")
-            return DEFAULT_COMMANDS[command.program](*command.args)
-
         try:
             pid = os.fork()
         except OSError as e:
@@ -101,7 +114,7 @@ def execute_pipeline(pipeline: Pipeline) -> int:
 
         if pid == 0:
             # child process
-            run_in_child(command)
+            run_in_child(command, stdin_fd, stdout_fd, pipe_fds)
         else:
             # parent process
             _, status = os.waitpid(pid, 0)
