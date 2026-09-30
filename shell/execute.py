@@ -57,10 +57,11 @@ def apply_redirections(redirections: list[Redirection]):
             try:
                 os.dup2(redir.target, redir.fd)
             except OSError as e:
-                raise RedirectionError(f"{redir.target}: {e.strerror}") from e\
+                raise RedirectionError(f"{redir.target}: {e.strerror}") from e
 
-def run_in_child(command: Command, stdin_fd: int, stdout_fd: int, pipe_fds: list[tuple[int, int]]):
+def run_in_child(command: Command, stdin_fd: int | None, stdout_fd: int | None, pipe_fds: list[int]) -> None:
     # runs in the newly created child process after a fork
+    # will never return
     try:
         try:
             apply_redirections(command.redirections)
@@ -102,11 +103,26 @@ def execute_pipeline(pipeline: Pipeline) -> int:
 
     # set up variables to track pipeline information
     n = len(pipeline.commands)
-    pipe_fds: list[int] = []     # flat list of every fd we've created
-    pipes: list[tuple[int, int]] = []
-    pids: list[int] = []
+    pipe_fds: list[int] = []  # track every fd we created to ensure they all get closed
+    pipes: list[tuple[int, int]] = []  # all pipes created by OS
+    pids: list[int] = []  # all PIDs (stages of pipeline) that we have run so far
+
+    for _ in range(n - 1):
+        r, w = os.pipe()
+        pipes.append((r, w))
+        pipe_fds += [r, w]
+
+    print(pipe_fds)
+    print(pipes)
+    print(pids)
     
-    for command in pipeline.commands:
+    for i, command in enumerate(pipeline.commands):
+        # select appropriate stdin and stdout for this command in the pipeline
+        # if we're at the beginning or end, either stdin or stdout is None
+        # meaning the child will inherit the shell's stdin or stdout
+        stdin_fd = pipes[i - 1][0] if i > 0 else None
+        stdout_fd = pipes[i][1] if i < n - 1 else None
+        
         try:
             pid = os.fork()
         except OSError as e:
@@ -117,7 +133,9 @@ def execute_pipeline(pipeline: Pipeline) -> int:
             run_in_child(command, stdin_fd, stdout_fd, pipe_fds)
         else:
             # parent process
-            _, status = os.waitpid(pid, 0)
-            return _wait_status(status)
+            # track the PID of the child
+            pids.append(pid)
 
-    return -1
+    # wait for EVERY process in the pipeline to finish, and return the exit status of the last one
+    statuses = [os.waitpid(pid, 0)[1] for pid in pids]
+    return _wait_status(statuses[-1])
