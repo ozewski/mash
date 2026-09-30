@@ -9,6 +9,7 @@ from shell.cli import get_prompt
 from shell.colors import colors
 from shell.execute import execute_pipeline, ExecutionError
 from shell.parser import parse_command, ParseError
+from shell.state import state
 
 VERSION = "0.1.0"
 
@@ -48,6 +49,8 @@ try:
                     execute_pipeline(pipeline)
                 except ExecutionError as e:
                     print(f"mash: execution error: {e}", file=sys.stderr)
+                if state.exit_requested:
+                    break
 
         except Exception as e:
             print(f"mash: unexpected error: {e}", file=sys.stderr)

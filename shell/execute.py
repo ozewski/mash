@@ -72,6 +72,20 @@ def run_in_child(command: Command, stdin_fd: int | None, stdout_fd: int | None, 
     # runs in the newly created child process after a fork
     # will never return
     try:
+        # wire up pipes
+        try:
+            if stdin_fd is not None:
+                os.dup2(stdin_fd, 0)
+            if stdout_fd is not None:
+                os.dup2(stdout_fd, 1)
+        except OSError as e:
+            _report(f"pipe setup failed: {e.strerror}")
+            os._exit(1)
+
+        # close original pipe FDs (the dups survive)
+        _close_all(pipe_fds)
+
+        # handle explicit I/O redirections
         try:
             apply_redirections(command.redirections)
         except RedirectionError as e:
@@ -115,10 +129,15 @@ def execute_pipeline(pipeline: Pipeline) -> int:
     pipe_fds: list[int] = []  # track every fd we created to ensure they all get closed
     pipes: list[tuple[int, int]] = []  # all pipes created by OS
     pids: list[int] = []  # all PIDs (stages of pipeline) that we have run so far
+    pipeline_error = None  # track any errors that occur during the execution of the pipeline
 
     try:
         for _ in range(n - 1):
-            r, w = os.pipe()
+            try:
+                r, w = os.pipe()
+            except OSError as e:
+                raise ExecutionError(f"failed to create pipe: {e.strerror}") from e
+
             pipes.append((r, w))
             pipe_fds += [r, w]
 
@@ -145,10 +164,18 @@ def execute_pipeline(pipeline: Pipeline) -> int:
                 # parent process
                 # track the PID of the child
                 pids.append(pid)
+    except ExecutionError as e:
+        # we save the error so that we can proceed and wait on the rest of the pipeline
+        pipeline_error = e
     finally:
         # guaranteed resource cleanup: close all pipe fds in the parent process
         _close_all(pipe_fds)
 
-    # wait for EVERY process in the pipeline to finish, and return the exit status of the last one
+    # wait for EVERY process in the pipeline to finish
     statuses = [os.waitpid(pid, 0)[1] for pid in pids]
+
+    if pipeline_error:
+        raise pipeline_error
+    
+    # return the exit status of the last process in the pipeline if no error
     return _wait_status(statuses[-1])

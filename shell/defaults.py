@@ -1,7 +1,10 @@
 import sys
 import os
 
+from shell.state import state
 from shell.colors import colors
+
+# All defaults should return a status number.
 
 def _run_cd(path):
     saved_pwd = os.getcwd()
@@ -13,7 +16,7 @@ def _run_cd(path):
     
     os.environ["OLDPWD"] = saved_pwd
 
-def cd(*args):
+def cd(*args) -> int:
     if len(args) > 1:
         print("mash: cd: too many arguments", file=sys.stderr)
         return 1
@@ -46,7 +49,7 @@ def cd(*args):
             print(f"mash: cd: {path}: no such file or directory", file=sys.stderr)
             return 1
     
-def exit(*args):
+def exit(*args) -> int:
     if len(args) > 1:
         print("mash: exit: too many arguments", file=sys.stderr)
         return 1
@@ -59,4 +62,5 @@ def exit(*args):
             print(f"mash: exit: {args[0]}: numeric argument required", file=sys.stderr)
             return 1
 
-    sys.exit(exit_code)
+    state.exit_requested = True
+    return exit_code
