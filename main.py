@@ -44,13 +44,7 @@ while True:
 
         if pipeline:
             try:
-                status = execute_pipeline(pipeline)
-                if status == 127:
-                    # file not found
-                    print(f"mash: file not found", file=sys.stderr)
-                elif status == 126:
-                    # no permission
-                    print(f"mash: no permission", file=sys.stderr)
+                execute_pipeline(pipeline)
             except ExecutionError as e:
                 print(f"mash: execution error: {e}", file=sys.stderr)
 

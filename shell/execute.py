@@ -8,8 +8,19 @@ DEFAULT_COMMANDS = {
     "exit": mash_exit
 }
 
+def _report(msg: str) -> None:
+    # use low-level os.write to prevent issues with buffered output
+    # this is used in the child process after a fork
+    try:
+        os.write(2, f"mash: {msg}\n".encode(errors="replace"))
+    except OSError:
+        pass
+
 class ExecutionError(Exception):
     """Raised when the execution of a pipeline fails."""
+
+class RedirectionError(Exception):
+    """Raised in the child when a redirection can't be set up."""
 
 def apply_redirections(redirections: list[Redirection]):
     for redir in redirections:
@@ -20,11 +31,27 @@ def apply_redirections(redirections: list[Redirection]):
                 RedirectOp.WRITE_APPEND: os.O_WRONLY | os.O_CREAT | os.O_APPEND
             }[redir.op]
 
-            path_fd = os.open(redir.path, flags, 0o666)
-            os.dup2(path_fd, redir.fd)
-            os.close(path_fd)
+            try:
+                # get fd for target path
+                path_fd = os.open(redir.path, flags, 0o666)
+            except OSError as e:
+                raise RedirectionError(f"{redir.path}: {e.strerror}") from e
+
+            if path_fd != redir.fd: # the internet says that there are cases where this could be an issue
+                try:
+                    # perform the redirection
+                    os.dup2(path_fd, redir.fd)
+                except OSError as e:
+                    raise RedirectionError(f"{redir.fd}: {e.strerror}") from e
+                finally:
+                    # close the fd to prevent leaks
+                    os.close(path_fd)
+
         elif isinstance(redir, FdDuplication):
-            os.dup2(redir.target, redir.fd)
+            try:
+                os.dup2(redir.target, redir.fd)
+            except OSError as e:
+                raise RedirectionError(f"{redir.target}: {e.strerror}") from e
 
 
 def execute_pipeline(pipeline: Pipeline) -> int:
@@ -43,19 +70,29 @@ def execute_pipeline(pipeline: Pipeline) -> int:
         if pid == 0:
             # child process
             try:
-                apply_redirections(pipeline.commands[0].redirections)
-                os.execvp(command.program, command.argv)
-            except FileNotFoundError:
-                # my research says these are standard exit codes
-                os._exit(127)
-            except PermissionError:
-                os._exit(126)
-            except OSError:
-                os._exit(1)
+                try:
+                    apply_redirections(command.redirections)
+                except RedirectionError as e:
+                    _report(str(e))
+                    os._exit(1)
+
+                try:
+                    os.execvp(command.program, command.argv)
+                except FileNotFoundError:
+                    _report(f"{command.program}: command not found")
+                    os._exit(127)
+                except PermissionError:
+                    _report(f"{command.program}: permission denied")
+                    os._exit(126)
+                except OSError as e:
+                    _report(f"{command.program}: {e.strerror}")
+                    os._exit(1)
+
+            except BaseException as e:
+                _report(f"internal error: {e}")
             finally:
                 os._exit(1)
-            
-                
+    
         else:
             # parent process
             _, status = os.waitpid(pid, 0)
