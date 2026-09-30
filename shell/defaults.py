@@ -11,16 +11,17 @@ def cd(*args):
         print("mash: cd: too many arguments", file=sys.stderr)
         return 1
 
-    if not args:
+    if not args or args[0] == "~":
         # change to home directory
+        _run_cd(os.path.expanduser("~"))
         return 0
-        pass
     
     path = args[0]
 
     if path == "-":
         old_pwd = os.environ["OLDPWD"]
         if old_pwd:
+            print(old_pwd) # this is how bash does it
             _run_cd(os.environ["OLDPWD"])
             return 0
         else:

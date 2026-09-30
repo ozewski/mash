@@ -20,7 +20,7 @@ def execute_pipeline(pipeline: Pipeline) -> int:
     
     for command in pipeline.commands:
         if command.program in DEFAULT_COMMANDS:
-            return DEFAULT_COMMANDS[command.program]()
+            return DEFAULT_COMMANDS[command.program](*command.args)
 
         try:
             pid = os.fork()
