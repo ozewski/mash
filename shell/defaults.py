@@ -1,6 +1,8 @@
 import sys
 import os
 
+from shell.colors import colors
+
 def _run_cd(path):
     saved_pwd = os.getcwd()
     os.chdir(path)
@@ -40,4 +42,17 @@ def cd(*args):
             return 1
     
 def exit(*args):
-    pass
+    if len(args) > 1:
+        print("mash: exit: too many arguments", file=sys.stderr)
+        return 1
+
+    exit_code = 0
+    if args:
+        try:
+            exit_code = int(args[0])
+        except ValueError:
+            print(f"mash: exit: {args[0]}: numeric argument required", file=sys.stderr)
+            return 1
+
+    print("mash: exiting gracefully...\n" + colors.RESET)
+    sys.exit(exit_code)

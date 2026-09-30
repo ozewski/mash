@@ -33,7 +33,7 @@ while True:
         print("^C")
         continue
     except EOFError:
-        print("\nmash: exiting gracefully...")
+        print("\nmash: exiting gracefully...\n" + colors.RESET)
         break
 
     try:
@@ -56,5 +56,3 @@ while True:
 
     except Exception as e:
         print(f"mash: unexpected error: {e}", file=sys.stderr)
-
-print(colors.RESET)
