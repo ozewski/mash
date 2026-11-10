@@ -125,7 +125,8 @@ def history(*args) -> int:
             return 0
 
         # snap start to entry that will produce n entries from the end
-        start = length - n + 1
+        # also, prevent negative lengths
+        start = max(1, length - n + 1)
 
     for i in range(start, length + 1):
         # left-padded number
