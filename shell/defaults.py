@@ -7,15 +7,16 @@ from shell.colors import colors
 
 # All defaults should return a status number.
 
-def _run_cd(path):
+def _run_cd(path) -> int:
     saved_pwd = os.getcwd()
     try:
         os.chdir(path)
     except OSError as e:
         print(f"mash: cd: {path}: {e.strerror}", file=sys.stderr)
-        return
+        return 1
     
     os.environ["OLDPWD"] = saved_pwd
+    return 0
 
 def cd(*args) -> int:
     if len(args) > 1:
@@ -24,8 +25,7 @@ def cd(*args) -> int:
 
     if not args or args[0] == "~":
         # change to home directory
-        _run_cd(os.path.expanduser("~"))
-        return 0
+        return _run_cd(os.path.expanduser("~"))
     
     path = args[0]
 
@@ -33,8 +33,7 @@ def cd(*args) -> int:
         old_pwd = os.environ.get("OLDPWD", None)
         if old_pwd:
             print(old_pwd) # this is how bash does it
-            _run_cd(os.environ["OLDPWD"])
-            return 0
+            return _run_cd(os.environ["OLDPWD"])
         else:
             print("mash: cd: no previous directory", file=sys.stderr)
             return 1
@@ -44,8 +43,7 @@ def cd(*args) -> int:
             print(f"mash: cd: {path}: not a directory", file=sys.stderr)
             return 1
         if os.path.isdir(path):
-            _run_cd(path)
-            return 0
+            return _run_cd(path)
         else:
             print(f"mash: cd: {path}: no such file or directory", file=sys.stderr)
             return 1
