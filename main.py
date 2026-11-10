@@ -1,6 +1,7 @@
 import platform
 import readline
 import sys
+import os
 
 from datetime import datetime, timezone
 from pprint import pprint
@@ -12,6 +13,9 @@ from shell.parser import parse_command, ParseError
 from shell.state import state
 
 VERSION = "0.1.0"
+
+if "MASH_CWD_MAX" not in os.environ:
+    os.environ["MASH_CWD_MAX"] = "20"
 
 utc_now = datetime.now(timezone.utc)
 using_wsl = "wsl" in platform.release().lower()
