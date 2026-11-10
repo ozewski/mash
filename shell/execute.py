@@ -7,7 +7,8 @@ import shell.defaults
 DEFAULT_COMMANDS = {
     "cd": shell.defaults.cd,
     "exit": shell.defaults.exit,
-    "export": shell.defaults.export
+    "export": shell.defaults.export,
+    "history": shell.defaults.history,
 }
 
 def _wait_status(status: int):

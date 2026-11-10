@@ -112,7 +112,7 @@ def history(*args) -> int:
         readline.clear_history()
         return 0
 
-    start_index = 1
+    start = 1
     if args:
         # expecting numeric argument
         n = args[0]
