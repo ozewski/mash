@@ -2,11 +2,12 @@ import os
 import sys
 
 from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
-from shell.defaults import cd as mash_cd, exit as mash_exit
+import shell.defaults
 
 DEFAULT_COMMANDS = {
-    "cd": mash_cd,
-    "exit": mash_exit
+    "cd": shell.defaults.cd,
+    "exit": shell.defaults.exit,
+    "export": shell.defaults.export
 }
 
 def _wait_status(status: int):
