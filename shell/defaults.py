@@ -131,3 +131,5 @@ def history(*args) -> int:
     for i in range(start, length + 1):
         # left-padded number
         print(f"{i:5d}  {readline.get_history_item(i)}")
+
+    return 0

@@ -9,10 +9,13 @@ from pprint import pprint
 from shell.cli import get_prompt
 from shell.colors import colors
 from shell.execute import execute_pipeline, ExecutionError
+from shell.history import init_history
 from shell.parser import parse_command, ParseError
 from shell.state import state
 
 VERSION = "0.1.0"
+
+init_history()
 
 if "MASH_CWD_MAX" not in os.environ:
     os.environ["MASH_CWD_MAX"] = "20"
@@ -28,7 +31,6 @@ print()
 
 try:
     while True:
-        # TODO: add custom shell prompt with colors
         pipeline = None
 
         try:

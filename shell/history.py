@@ -10,10 +10,15 @@ HISTSIZE = 1000
 
 def init_history() -> None:
     readline.set_history_length(HISTSIZE)
+
+    # additional check: make sure the file exists and is private before readline touches it
+    try:
+        os.close(os.open(HISTFILE, os.O_CREAT | os.O_WRONLY, 0o600))
+    except OSError as e:
+        print(f"mash: warning: could not create {HISTFILE}: {e.strerror}", file=sys.stderr)
+
     try:
         readline.read_history_file(HISTFILE)
-    except FileNotFoundError:
-        pass
     except OSError as e:
         print(f"mash: warning: could not read {HISTFILE}: {e.strerror}", file=sys.stderr)
     
