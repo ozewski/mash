@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 
 from shell.state import state
 from shell.colors import colors
@@ -64,3 +65,28 @@ def exit(*args) -> int:
 
     state.exit_requested = True
     return exit_code
+
+def quote(value: str) -> str:
+    return "'" + value.replace("'", "'\\''") + "'"
+
+def export(*args) -> int:
+    if len(args) == 0 or args[0] == "-p":
+        for key, value in os.environ.items():
+            print(f"{key}={quote(value)}")
+        return 0
+
+    for arg in args:
+        varname, sep, value = arg.partition("=")
+
+        if not re.fullmatch("[A-Za-z_][A-Za-z0-9_]*", varname):
+            print(f"mash: export: {quote(arg)}: not a valid identifier", file=sys.stderr)
+            return 1
+
+        if not sep:
+            print("mash: exit: shell variables not supported", file=sys.stderr)
+            return 1
+
+        os.environ[varname] = value
+
+    return 0
+        
