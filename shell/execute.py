@@ -24,11 +24,6 @@ DEFAULT_COMMANDS = {
     "fg": shell.defaults.fg
 }
 
-def _wait_status(status: int):
-    # normalizes exit status to a positive integer
-    code = os.waitstatus_to_exitcode(status)
-    return 128 - code if code < 0 else code
-
 def _close_all(fds: list[int]) -> None:
     # try to close as many fds as possible
     # helper utility to prevent fd leaks in pipelines
@@ -253,11 +248,10 @@ def execute_pipeline(pipeline: Pipeline, cmdline: str) -> int:
         except OSError as e:
             print(f"mash: warning: could not give terminal to job: {e.strerror}", file=sys.stderr)
 
-    # TODO
-    # status = shell.jobs.wait_for_job(job)
+    # wait for the job to finish or get stopped
+    status = shell.jobs.wait_for_job(job)
 
     if pipeline_error:
-        raise pipeline_error
+       raise pipeline_error
 
-    # return the exit status of the last process in the pipeline if no error
-    return _wait_status(statuses[-1])
+    return status

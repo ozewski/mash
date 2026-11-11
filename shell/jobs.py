@@ -6,6 +6,14 @@ from dataclasses import dataclass
 
 from shell.state import state
 
+"""
+Notes about job control:
+- Job control only matters if the shell is interactive, because otherwise, there's no
+  foreground and background. We store the interactivity check in state.interactive.
+  So some code related to job control throughout the app is conditional on state.interactive
+  being equal to True.
+"""
+
 @dataclass
 class Proc:
     pid: int                # pid of process
@@ -33,6 +41,11 @@ class Job:
             not any(p.state == "running" for p in self.procs)
             and any(p.state == "stopped" for p in self.procs)
         )
+
+def wait_status(status: int):
+    # normalizes exit status to a positive integer
+    code = os.waitstatus_to_exitcode(status)
+    return 128 - code if code < 0 else code
 
 # keep track of all jobs
 _jobs: list[Job] = []
@@ -106,6 +119,27 @@ def wait_for_job(job: Job) -> int:
                 # in this case, we want to keep waiting on the process
                 continue
             update_proc(proc, status)
+
+    # return terminal control to the shell
+    if state.interactive:
+        os.tcsetpgrp(state.tty_fd, state.shell_pgid)
+        if job.is_stopped:
+            # we only care about its settings if the job was stopped
+            # because if the job finished, it won't be resumed, so it doesn't matter
+            job.terminal_modes = termios.tcgetattr(state.tty_fd)   # save job's settings
+
+        # reset shell terminal configuration
+        termios.tcsetattr(state.tty_fd, termios.TCSADRAIN, state.terminal_modes)
+
+    # standard output if the job was stopped
+    # TODO: double check this
+    if job.is_stopped:
+        print(f"\n[{job.num}]+ Stopped  {job.cmdline}")
+        # leave the job in the table and return standard exit code
+        return 128 + signal.SIGTSTP
+
+    remove_job(job)
+    return wait_status(job.procs[-1].status)
 
 
 def init_job_control():
