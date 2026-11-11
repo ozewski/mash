@@ -1,8 +1,17 @@
 import os
+import signal
 import sys
 
-from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
 import shell.defaults
+from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
+from shell.state import state
+
+"""
+Some notes about job control:
+- We run setpgid (setting the process group) and tcsetpgrp (setting a process
+  group to foreground) in both the parent and child to fix a couple rare but
+  important race conditions that the internet says could occur.
+"""
 
 DEFAULT_COMMANDS = {
     "cd": shell.defaults.cd,
@@ -73,10 +82,45 @@ def apply_redirections(redirections: list[Redirection]):
             except OSError as e:
                 raise RedirectionError(f"{redir.target}: {e.strerror}") from e
 
-def run_in_child(command: Command, stdin_fd: int | None, stdout_fd: int | None, pipe_fds: list[int]) -> None:
+def run_in_child(
+        command: Command, 
+        stdin_fd: int | None, 
+        stdout_fd: int | None, 
+        pipe_fds: list[int], 
+        pgid: int
+    ) -> None:
     # runs in the newly created child process after a fork
     # will never return
     try:
+        # perform terminal handoff (job control)
+        if state.interactive:
+            # first stage: pgid == 0
+            # - in this scenario, process becomes leader of a new group
+            # all other stages: pgid > 0
+            # - process joins the group created by the first stage
+            os.setpgid(0, pgid)
+
+            try:
+                # best-effort attempt to set the foreground process group
+                # this is a no-op if it worked in the parent
+                os.tcsetpgrp(state.tty_fd, os.getpgrp())
+            except OSError:
+                # the only failure here would be caused by some kind of
+                # race case with the parent, and the parent would have
+                # already fixed and ensured that tcsetpgrp worked. so we
+                # don't care about any issue
+                pass
+
+            for sig in (
+                signal.SIGINT, 
+                signal.SIGQUIT, 
+                signal.SIGTSTP,
+                signal.SIGTTIN, 
+                signal.SIGTTOU
+            ):
+                # resume processing for all relevant signals in the child
+                signal.signal(sig, signal.SIG_DFL)
+
         # wire up pipes
         try:
             if stdin_fd is not None:
