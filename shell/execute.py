@@ -9,6 +9,9 @@ DEFAULT_COMMANDS = {
     "exit": shell.defaults.exit,
     "export": shell.defaults.export,
     "history": shell.defaults.history,
+    "jobs": shell.defaults.jobs,
+    "bg": shell.defaults.bg,
+    "fg": shell.defaults.fg
 }
 
 def _wait_status(status: int):
