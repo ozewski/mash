@@ -167,7 +167,7 @@ def run_in_child(
     finally:
         os._exit(1)
 
-def execute_pipeline(pipeline: Pipeline) -> int:
+def execute_pipeline(pipeline: Pipeline, cmdline: str) -> int:
     if len(pipeline.commands) == 1 and pipeline.commands[0].program in DEFAULT_COMMANDS:
         # handle a single built-in command directly in the shell process
         command = pipeline.commands[0]
@@ -185,6 +185,7 @@ def execute_pipeline(pipeline: Pipeline) -> int:
     pipes: list[tuple[int, int]] = []  # all pipes created by OS
     pids: list[int] = []  # all PIDs (stages of pipeline) that we have run so far
     pipeline_error = None  # track any errors that occur during the execution of the pipeline
+    pgid: int = 0  # initial group ID, which is set later to the PID of the process that created the group
 
     try:
         for _ in range(n - 1):
@@ -210,11 +211,25 @@ def execute_pipeline(pipeline: Pipeline) -> int:
 
             if pid == 0:
                 # child process
-                run_in_child(command, stdin_fd, stdout_fd, pipe_fds)
+                run_in_child(command, stdin_fd, stdout_fd, pipe_fds, pgid)
             else:
                 # parent process
                 # track the PID of the child
                 pids.append(pid)
+
+                if state.interactive:
+                    if pgid == 0:
+                        # we just created the first child;
+                        # set the group ID to its PID so all following children
+                        # join the process group
+                        pgid = pid
+
+                    try:
+                        # parent attempts to set process group
+                        os.setpgid(pid, pgid)
+                    except OSError:
+                        # ...but maybe the child already did it
+                        pass
             
     except BaseException as e:
         # we save the error so that we can proceed and wait on the rest of the pipeline

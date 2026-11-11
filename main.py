@@ -54,7 +54,7 @@ try:
 
             if pipeline:
                 try:
-                    execute_pipeline(pipeline)
+                    execute_pipeline(pipeline, command)
                 except ExecutionError as e:
                     print(f"mash: execution error: {e}", file=sys.stderr)
                 if state.exit_requested:
