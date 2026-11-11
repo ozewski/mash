@@ -2,8 +2,92 @@ import os
 import signal
 import sys
 import termios
+from dataclasses import dataclass
 
 from shell.state import state
+
+@dataclass
+class Proc:
+    pid: int                # pid of process
+    state: str = "running"  # running, stopped (can be resumed), or done
+    status: int = 0         # raw waitpid status (only meaningful once done)
+
+@dataclass
+class Job:
+    num: int
+    pgid: int
+    procs: list[Proc]
+    cmdline: str
+    terminal_modes: list | None = None
+    background: bool = False
+
+    @property
+    def is_done(self) -> bool:
+        # every process is done
+        return all(p.state == "done" for p in self.procs)
+
+    @property
+    def is_stopped(self) -> bool:
+        # no processes are running, and any process is stopped
+        return (
+            not any(p.state == "running" for p in self.procs)
+            and any(p.state == "stopped" for p in self.procs)
+        )
+
+# keep track of all jobs
+_jobs: list[Job] = []
+
+def all_jobs() -> list[Job]:
+    return _jobs
+
+def add_job(pgid: int, pids: list[int], cmdline: str, background: bool = False) -> Job:
+    # first number = 1, otherwise increment
+    num = max((j.num for j in _jobs), default=0) + 1
+    job = Job(
+        num, pgid, [Proc(pid) for pid in pids], cmdline, background=background
+    )
+
+    _jobs.append(job)
+    return job
+
+def remove_job(job: Job):
+    if job in _jobs:
+        _jobs.remove(job)
+
+def find_job(id: str | int | None) -> Job | None:
+    # pass either the "%1" format, 1, or None (to get most recent job)
+    if not _jobs:
+        return None
+    if id is None:
+        # return most recent job
+        return _jobs[-1]
+
+    if isinstance(id, int):
+        num = id
+    else:
+        try:
+            num = int(id.lstrip("%"))
+        except ValueError:
+            return None
+    
+    return next((j for j in _jobs if j.num == num), None)
+
+def find_proc(pid: int) -> tuple[Job | None, Proc | None]:
+    # attempt to locate a process and its associated job
+    for job in _jobs:
+        for p in job.procs:
+            if p.pid == pid:
+                return job, p
+    return None, None
+
+def update_proc(proc: Proc, status: int) -> None:
+    if os.WIFSTOPPED(status):  # process was stopped by a signal
+        proc.state = "stopped"
+    elif os.WIFCONTINUED(status):  # process was continued by a signal
+        proc.state = "running"
+    else:  # process exited or was killed by a signal
+        proc.state = "done"
+        proc.status = status
 
 def init_job_control():
     if not state.interactive:
