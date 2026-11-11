@@ -133,3 +133,12 @@ def history(*args) -> int:
         print(f"{i:5d}  {readline.get_history_item(i)}")
 
     return 0
+
+def jobs(*args) -> int:
+    return 1
+
+def bg(*args) -> int:
+    return 1
+
+def fg(*args) -> int:
+    return 1
