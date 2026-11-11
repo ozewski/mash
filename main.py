@@ -10,12 +10,14 @@ from shell.cli import get_prompt
 from shell.colors import colors
 from shell.execute import execute_pipeline, ExecutionError
 from shell.history import init_history
+from shell.jobs import init_job_control
 from shell.parser import parse_command, ParseError
 from shell.state import state
 
 VERSION = "0.1.0"
 
 init_history()
+init_job_control()
 
 if "MASH_CWD_MAX" not in os.environ:
     os.environ["MASH_CWD_MAX"] = "20"
