@@ -3,6 +3,7 @@ import signal
 import sys
 
 import shell.defaults
+import shell.jobs
 from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
 from shell.state import state
 
@@ -239,11 +240,24 @@ def execute_pipeline(pipeline: Pipeline, cmdline: str) -> int:
         # guaranteed resource cleanup: close all pipe fds in the parent process
         _close_all(pipe_fds)
 
-    # wait for EVERY process in the pipeline to finish
-    statuses = [os.waitpid(pid, 0)[1] for pid in pids]
+    if not pids:
+        raise pipeline_error or ExecutionError("no processes started")
+
+    # create new shell job
+    job = shell.jobs.add_job(pgid, pids, cmdline)
+
+    if state.interactive:
+        # attempt to give the foreground to the job
+        try:
+            os.tcsetpgrp(state.tty_fd, pgid)
+        except OSError as e:
+            print(f"mash: warning: could not give terminal to job: {e.strerror}", file=sys.stderr)
+
+    # TODO
+    # status = shell.jobs.wait_for_job(job)
 
     if pipeline_error:
         raise pipeline_error
-    
+
     # return the exit status of the last process in the pipeline if no error
     return _wait_status(statuses[-1])

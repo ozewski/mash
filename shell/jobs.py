@@ -89,6 +89,25 @@ def update_proc(proc: Proc, status: int) -> None:
         proc.state = "done"
         proc.status = status
 
+def wait_for_job(job: Job) -> int:
+    # block until no process in the job is "running"
+    for proc in job.procs:
+        while proc.state == "running":
+            try:
+                # using WUNTRACTED will also report if process was suspended
+                _, status = os.waitpid(proc.pid, os.WUNTRACED)
+            except ChildProcessError:
+                # someone else already got the status
+                # we can treat the process as finished
+                proc.state = "done"
+                break
+            except InterruptedError:
+                # we got interrupted by a signal
+                # in this case, we want to keep waiting on the process
+                continue
+            update_proc(proc, status)
+
+
 def init_job_control():
     if not state.interactive:
         return
