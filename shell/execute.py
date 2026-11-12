@@ -88,6 +88,9 @@ def run_in_child(
     # runs in the newly created child process after a fork
     # will never return
     try:
+        # must restore SIGPIPE for the child, since python disables it
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+
         # perform terminal handoff (job control)
         if state.interactive:
             # first stage: pgid == 0

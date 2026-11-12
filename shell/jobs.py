@@ -123,9 +123,6 @@ def wait_for_job(job: Job) -> int:
     if state.interactive:
         try:
             os.tcsetpgrp(state.tty_fd, state.shell_pgid)
-        except (OSError, termios.error) as e:
-            print(f"mash: warning: could not restore terminal state: {e.strerror}", file=sys.stderr)
-        finally:
             if job.is_stopped:
                 # we only care about its settings if the job was stopped
                 # because if the job finished, it won't be resumed, so it doesn't matter
@@ -133,9 +130,10 @@ def wait_for_job(job: Job) -> int:
 
             # reset shell terminal configuration
             termios.tcsetattr(state.tty_fd, termios.TCSADRAIN, state.terminal_modes)
+        except (OSError, termios.error) as e:
+            print(f"mash: warning: could not restore terminal state: {e.strerror}", file=sys.stderr)
 
     # standard output if the job was stopped
-    # TODO: double check this
     if job.is_stopped:
         print(f"\n[{job.num}]+ Stopped  {job.cmdline}")
         # leave the job in the table and return standard exit code
@@ -168,7 +166,7 @@ def init_job_control():
     saved_signal_handlers = {}
     try:
         # wait until our shell is in the foreground
-        while os.tcgetpgrp(state.tty_fd) != os.getpgrp():
+        while os.tcgetpgrp(tty_fd) != os.getpgrp():
             # we send SIGTTIN to our shell's process group to suspend it
             os.killpg(os.getpgrp(), signal.SIGTTIN)
 
@@ -185,11 +183,11 @@ def init_job_control():
 
         # there could be a case where our shell already has a pgid
         # in that case, we could skip this step
-        if os.getpgrp() != state.shell_pgid:
-            os.setpgid(0, state.shell_pgid)
+        if os.getpgrp() != shell_pgid:
+            os.setpgid(0, shell_pgid)
 
         # put our app in the foreground
-        os.tcsetpgrp(tty_fd, state.shell_pgid)
+        os.tcsetpgrp(tty_fd, shell_pgid)
         terminal_modes = termios.tcgetattr(tty_fd)
 
     except (OSError, termios.error) as e:
