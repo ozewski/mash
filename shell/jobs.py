@@ -114,22 +114,22 @@ def wait_for_job(job: Job) -> int:
                 # we can treat the process as finished
                 proc.state = "done"
                 break
-            except InterruptedError:
-                # we got interrupted by a signal
-                # in this case, we want to keep waiting on the process
-                continue
             update_proc(proc, status)
 
     # return terminal control to the shell
     if state.interactive:
-        os.tcsetpgrp(state.tty_fd, state.shell_pgid)
-        if job.is_stopped:
-            # we only care about its settings if the job was stopped
-            # because if the job finished, it won't be resumed, so it doesn't matter
-            job.terminal_modes = termios.tcgetattr(state.tty_fd)   # save job's settings
+        try:
+            os.tcsetpgrp(state.tty_fd, state.shell_pgid)
+        except (OSError, termios.error) as e:
+            print(f"mash: warning: could not restore terminal state: {e.strerror}", file=sys.stderr)
+        finally:
+            if job.is_stopped:
+                # we only care about its settings if the job was stopped
+                # because if the job finished, it won't be resumed, so it doesn't matter
+                job.terminal_modes = termios.tcgetattr(state.tty_fd)   # save job's settings
 
-        # reset shell terminal configuration
-        termios.tcsetattr(state.tty_fd, termios.TCSADRAIN, state.terminal_modes)
+            # reset shell terminal configuration
+            termios.tcsetattr(state.tty_fd, termios.TCSADRAIN, state.terminal_modes)
 
     # standard output if the job was stopped
     # TODO: double check this
@@ -171,8 +171,8 @@ def init_job_control():
     # SIGTSTP: when the user presses CTRL+Z
     signal.signal(signal.SIGTSTP, signal.SIG_IGN)
 
-    # use /dev/tty because stdin or stdout could have been redirected
-    state.tty_fd = os.open("/dev/tty", os.O_RDWR)
+    # SIGQUIT: when the user presses CTRL+\
+    signal.signal(signal.SIGQUIT, signal.SIG_IGN)
     
     # we attempt to put the shell in its own process group, so that we can
     # set it as the foreground later (give it terminal control)
