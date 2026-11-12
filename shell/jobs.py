@@ -12,6 +12,9 @@ Notes about job control:
   foreground and background. We store the interactivity check in state.interactive.
   So some code related to job control throughout the app is conditional on state.interactive
   being equal to True.
+- In the initialization, we follow a rollback pattern that will rollback all the signal setters
+  if any part of the initialization fails (and disables interactive mode). This way, the
+  shell can proceed even if our attempt to initialize job control fails.
 """
 
 @dataclass
@@ -141,54 +144,67 @@ def wait_for_job(job: Job) -> int:
     remove_job(job)
     return wait_status(job.procs[-1].status)
 
+JOB_SIGNALS = (
+    signal.SIGTTOU,  # when a bg process group attempts to change terminal settings
+    signal.SIGTTIN,  # when a bg process groups tries to read from the terminal
+    signal.SIGTSTP,  # when the user presses CTRL+Z
+    signal.SIGQUIT   # when the user presses CTRL+\
+)
 
 def init_job_control():
     if not state.interactive:
         return
 
     try:
-        state.tty_fd = os.open("/dev/tty", os.O_RDWR)
+        tty_fd = os.open("/dev/tty", os.O_RDWR)
     except OSError:
         # we can keep running even if we're not interactive
         state.interactive = False
         return
 
-    # wait until our shell is in the foreground
-    while os.tcgetpgrp(state.tty_fd) != os.getpgrp():
-        # we send SIGTTIN to our shell's process group to suspend it
-        os.killpg(os.getpgrp(), signal.SIGTTIN)
+    # rollback pattern:
+    # all these operations can be rolled back upon finding any error
 
-    # we will ignore these for the shell and re-enable them in the children
-    # if we didn't, these operations would affect the shell itself rather than
-    # the children, leading to undesirable behavior
+    saved_signal_handlers = {}
+    try:
+        # wait until our shell is in the foreground
+        while os.tcgetpgrp(state.tty_fd) != os.getpgrp():
+            # we send SIGTTIN to our shell's process group to suspend it
+            os.killpg(os.getpgrp(), signal.SIGTTIN)
 
-    # SIGTTOU: when a bg process group attempts to change terminal settings
-    signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+        # we will ignore these for the shell and re-enable them in the children
+        # if we didn't, these operations would affect the shell itself rather than
+        # the children, leading to undesirable behavior
 
-    # SIGTTIN: when a bg process groups tries to read from the terminal
-    signal.signal(signal.SIGTTIN, signal.SIG_IGN)
+        for sig in JOB_SIGNALS:
+            saved_signal_handlers[sig] = signal.signal(sig, signal.SIG_IGN)
+        
+        # we attempt to put the shell in its own process group, so that we can
+        # set it as the foreground later (give it terminal control)
+        shell_pgid = os.getpid()
 
-    # SIGTSTP: when the user presses CTRL+Z
-    signal.signal(signal.SIGTSTP, signal.SIG_IGN)
-
-    # SIGQUIT: when the user presses CTRL+\
-    signal.signal(signal.SIGQUIT, signal.SIG_IGN)
-    
-    # we attempt to put the shell in its own process group, so that we can
-    # set it as the foreground later (give it terminal control)
-    state.shell_pgid = os.getpid()
-
-    # there could be a case where our shell already has a pgid
-    # in that case, we could skip this step
-    if os.getpgrp() != state.shell_pgid:
-        try:
+        # there could be a case where our shell already has a pgid
+        # in that case, we could skip this step
+        if os.getpgrp() != state.shell_pgid:
             os.setpgid(0, state.shell_pgid)
-        except OSError:
-            print("mash: fatal error: could not establish job control", file=sys.stderr)
-            state.interactive = False
-            return
 
-    # put our app in the foreground
-    os.tcsetpgrp(state.tty_fd, state.shell_pgid)
-    state.terminal_modes = termios.tcgetattr(state.tty_fd)
+        # put our app in the foreground
+        os.tcsetpgrp(tty_fd, state.shell_pgid)
+        terminal_modes = termios.tcgetattr(tty_fd)
+
+    except (OSError, termios.error) as e:
+        # roll back everything we touched
+        for sig, handler in saved_signal_handlers.items():
+            signal.signal(sig, handler)
+
+        os.close(tty_fd)
+        print(f"mash: warning: job control disabled: {e}", file=sys.stderr)
+        state.interactive = False
+        # skip committing to state
+        return
+
+    # all operations successful: commit state
+    state.tty_fd = tty_fd
+    state.shell_pgid = shell_pgid
+    state.terminal_modes = terminal_modes
         
