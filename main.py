@@ -10,7 +10,7 @@ from shell.cli import get_prompt
 from shell.colors import colors
 from shell.execute import execute_pipeline, ExecutionError
 from shell.history import init_history
-from shell.jobs import init_job_control
+from shell.jobs import init_job_control, reap_jobs
 from shell.parser import parse_command, ParseError
 from shell.state import state
 
@@ -34,6 +34,7 @@ print()
 try:
     while True:
         pipeline = None
+        reap_jobs() # announce background changes before showing the prompt
 
         try:
             command = input(get_prompt()).strip()

@@ -207,7 +207,103 @@ def fg(*args) -> int:
     return shell.jobs.wait_for_job(job)
 
 def bg(*args) -> int:
-    return 1
+    if not state.interactive:
+        # without job control, this command is a no-op
+        print("mash: bg: no job control", file=sys.stderr)
+        return 1
+
+    targets = args
+    if not args:
+        targets = [None]
+
+    # using exit status tracker to allow one jobspec to be backgrounded even if another fails
+    status = 0
+
+    for target in target:
+        try:
+            # try to resolve the desired job
+            job = shell.jobs.resolve_jobspec(args[0] if args else None)
+        except shell.jobs.JobSpecError as e:
+            print(f"mash: bg: {e}", file=sys.stderr)
+            status = 1
+            continue
+
+        if job.is_stopped:
+            # this job is already in the background
+            print(f"mash: bg: job {job.num} already in background", file=sys.stderr)
+            status = 1
+            continue
+
+        job.background = True
+        for proc in job.procs:
+            proc.state = "running"
+
+        # why do we touch here?
+        shell.jobs.touch(job)
+
+        # what do we print here?
+
+        try:
+            # send a signal to the process to wake itself up
+            os.killpg(job.pgid, signal.SIGCONT)
+        except ProcessLookupError:
+            # same reasoning as in fg
+            for proc in job.procs:
+                if proc.state == "running":
+                    proc.state = "done"
+        
+    return status
 
 def kill(*args) -> int:
+    if not args:
+        print("mash: kill: not enough arguments", file=sys.stderr)
+        return 1
+
+    sig = None
+
+    if args[0] == "-l":
+        if len(args) > 1 and args[1].isascii() and args[1].isnumeric():
+            val = int(args[1])
+            if val in signal.Signals:
+                name = signal.Signals(val).name[3:]
+                print(name)
+                return 0
+            else:
+                print(f"mash: kill: {args[1]}: invalid signal", file=sys.stderr)
+                return 1
+        else:
+            for s in signal.Signals:
+                print(f"{s.value}) {s.name}")
+            return 0
+
+    elif args[0].startswith("-"):
+        if args[0] == "-s":
+            if len(args) < 2:
+                print(f"mash: kill: -s: not enough arguments", file=sys.stderr)
+                return 1
+            
+            sig = args[1]
+        else:
+            sig = args[0][1:]
+
+        if sig == "":
+            print(f"mash: kill: invalid syntax", file=sys.stderr)
+            return 1
+
+        if sig.isascii() and sig.isnumeric():
+            n = int(sig)
+            if n in signal.Signals:
+                sig = signal.Signals(n).name
+            else:
+                print(f"mash: kill: {sig}: invalid signal", file=sys.stderr)
+                return 1
+
+        sig = sig.upper()
+        if not sig.startswith("SIG"):
+            sig = "SIG" + sig
+
+    else:
+        # default
+        sig = "SIGTERM"
+
     return 1
