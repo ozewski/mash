@@ -151,9 +151,6 @@ def jobs(*args) -> int:
 
     return 0
 
-def bg(*args) -> int:
-    return 1
-
 def fg(*args) -> int:
     if len(args) > 1:
         print("mash: fg: too many arguments", file=sys.stderr)
@@ -208,3 +205,9 @@ def fg(*args) -> int:
                 proc.state = "done"
     
     return shell.jobs.wait_for_job(job)
+
+def bg(*args) -> int:
+    return 1
+
+def kill(*args) -> int:
+    return 1

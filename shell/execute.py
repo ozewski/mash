@@ -20,8 +20,9 @@ DEFAULT_COMMANDS = {
     "export": shell.defaults.export,
     "history": shell.defaults.history,
     "jobs": shell.defaults.jobs,
+    "fg": shell.defaults.fg,
     "bg": shell.defaults.bg,
-    "fg": shell.defaults.fg
+    "kill": shell.defaults.kill
 }
 
 def _close_all(fds: list[int]) -> None:

@@ -106,11 +106,30 @@ def resolve_jobspec(arg: str | None) -> Job:
         # reject anything else
         raise JobSpecError(f"{arg}: invalid job spec")
 
+# friendly names for the signals that could happen to a job
+_SIGNAL_NAMES = {
+    signal.SIGTERM: "Terminated",
+    signal.SIGKILL: "Killed",
+    signal.SIGHUP: "Hangup",
+    signal.SIGINT: "Interrupt",
+}
+
 def job_state(job: Job) -> str:
     if job.is_stopped:
         return "Stopped"
+    
     if job.is_done:
-        return "Done"
+        # a pipeline's outcome is its last stage
+        raw = job.procs[-1].status
+
+        if os.WIFSIGNALED(raw):
+            # died from a signal (e.g. via `kill`): we can name the signal
+            sig = os.WTERMSIG(raw)
+            return _SIGNAL_NAMES.get(sig) or signal.strsignal(sig) or f"Signal {sig}"
+
+        code = os.WEXITSTATUS(raw)
+        return "Done" if code == 0 else f"Exit {code}"
+    
     return "Running"
 
 def format_job(job: Job, marker: str = " ") -> str:
@@ -232,8 +251,6 @@ JOB_SIGNALS = (
     signal.SIGQUIT   # when the user presses CTRL+\
 )
 
-
-
 def init_job_control():
     if not state.interactive:
         return
@@ -290,4 +307,61 @@ def init_job_control():
     state.tty_fd = tty_fd
     state.shell_pgid = shell_pgid
     state.terminal_modes = terminal_modes
-        
+
+def reap_jobs():
+    # collects state from background children that nobody is waiting on
+    # updates the job table accordingly, and announces finished/stopped jobs
+    changed = []
+
+    while True:
+        try:
+            # -1 = any child, since we don't know which one changed
+            # WNOHANG = don't block; return pid 0 if nothing has changed
+            # WUNTRACED = also report children that were stopped (not just exited)
+            pid, status = os.waitpid(-1, os.WNOHANG | os.WUNTRACED)
+        except ChildProcessError:
+            # there are no children at all, so there is nothing left to collect
+            break
+
+        if pid == 0:
+            # there are children, but none have changed state
+            # we reach this at the end of the sweep
+            break
+
+        job, proc = find_proc(pid) # find the job and process in our state
+        if job is None or proc is None:
+            # we're not tracking this child
+            # we've reaped the process; that's all we need to do
+            continue
+
+        # otherwise, we're tracking this process
+        # must update our state
+        update_proc(proc, status)
+        if job not in changed:
+            changed.append(job)
+
+    if not changed:
+        return
+
+    current, previous = current_and_previous()
+
+    # for all jobs that have changed:
+    for job in changed:
+        if job.is_done:
+            # whole job has exited
+            # announce it, then drop it from the table
+            marker = "+" if job is current else "-" if job is previous else " "
+            print(format_job(job, marker))
+            remove_job(job)
+
+        elif job.is_stopped:
+            # a background job got a signal and stopped
+            # it's now the most recently active job, so bump it, then it is
+            # genuinely current and "+" is correct
+            touch(job)
+            print(format_job(job, "+"))
+
+        # otherwise, maybe the job changed but there are stil jobs in the pipeline running
+        # therefore, nothing to announce yet
+    
+    sys.stdout.flush()
