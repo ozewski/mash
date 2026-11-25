@@ -1,10 +1,12 @@
-import sys
 import os
 import re
 import readline
+import sys
 
-from shell.state import state
+
 from shell.colors import colors
+import shell.jobs
+from shell.state import state
 
 # All defaults should return a status number.
 
@@ -135,10 +137,50 @@ def history(*args) -> int:
     return 0
 
 def jobs(*args) -> int:
-    return 1
+    if args:
+        print("mash: jobs: arguments not supported", file=sys.stderr)
+        return 1
+
+    current, previous = shell.jobs.current_and_previous()
+
+    # list in job-number order; the markers show recency
+    for job in sorted(shell.jobs.all_jobs(), key=lambda j: j.num):
+        # the current/previous check matches bash conventions for table display
+        if job is current:
+            marker = "+"
+        elif job is previous:
+            marker = "-"
+        else:
+            marker = " "
+
+        state = "Stopped" if job.is_stopped else "Done" if job.is_done else "Running"
+        print(f"[{job.num}]{marker}  {state:<22}{job.cmdline}")
+
+    return 0
 
 def bg(*args) -> int:
     return 1
 
 def fg(*args) -> int:
     return 1
+
+def fg(*args) -> int:
+    # TEMPORARY STUB: only resolves the jobspec, so we can test the resolver
+    if len(args) > 1:
+        print("mash: fg: too many arguments", file=sys.stderr)
+        return 1
+
+    arg = args[0] if args else None
+
+    # fg accepts a bare number ("fg 1"), but the resolver only accepts "%1"
+    if arg is not None and arg.isascii() and arg.isdigit():
+        arg = "%" + arg
+
+    try:
+        job = shell.jobs.resolve_jobspec(arg)
+    except shell.jobs.JobSpecError as e:
+        print(f"mash: fg: {e}", file=sys.stderr)
+        return 1
+
+    print(f"resolved -> [{job.num}] {job.cmdline} (pgid {job.pgid})")
+    return 0

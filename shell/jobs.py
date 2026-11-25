@@ -29,6 +29,7 @@ class Job:
     pgid: int
     procs: list[Proc]
     cmdline: str
+    last_active: int = 0
     terminal_modes: list | None = None
     background: bool = False
 
@@ -45,13 +46,79 @@ class Job:
             and any(p.state == "stopped" for p in self.procs)
         )
 
+class JobSpecError(Exception):
+    """Raised when a jobspec can't be resolved to a job."""
+
+# keep track of all jobs
+_jobs: list[Job] = []
+
+# used to track sequence of most recent jobs interacted with
+# so we can track current and previous, which is necessary for fg/bg/jobs commands
+_job_seq = 0
+
+def resolve_jobspec(arg: str | None) -> Job:
+    if arg in [None, "%", "%%", "%+"]:
+        current, _ = current_and_previous()
+        if current is None:
+            raise JobSpecError("no current job")
+        return current
+
+    elif arg == "%-":
+        _, previous = current_and_previous()
+        if previous is None:
+            raise JobSpecError("no previous job")
+        return previous
+
+    elif arg and arg[0] == "%":
+        target = arg[1:]
+        if target.isascii() and target.isdigit():
+            # looking for job by number
+            job_num = int(target)
+            job = next(filter(
+                lambda j: j.num == job_num,
+                _jobs
+            ), None)
+
+            if not job:
+                raise JobSpecError(f"{arg}: no such job")
+            
+            return job
+
+        else:
+            # try to search by prefix
+            matches = list(filter(
+                lambda j: j.cmdline.startswith(target),
+                _jobs
+            ))
+
+            if not matches:
+                raise JobSpecError(f"{arg}: no such job")
+            elif len(matches) > 1:
+                # found more than one job for that prefix
+                raise JobSpecError(f"{arg}: ambiguous job spec")
+
+            return matches[0]
+
+    else:
+        # reject anything else
+        raise JobSpecError(f"{arg}: invalid spec")
+
+def current_and_previous() -> tuple[Job | None, Job | None]:
+    ordered = sorted(_jobs, key=lambda j: j.last_active, reverse=True)
+    current = ordered[0] if len(ordered) > 0 else None
+    previous = ordered[1] if len(ordered) > 1 else None
+    return current, previous
+
+def touch(job: Job) -> None:
+    global _job_seq
+    _job_seq += 1
+    job.last_active = _job_seq
+
 def wait_status(status: int):
     # normalizes exit status to a positive integer
     code = os.waitstatus_to_exitcode(status)
     return 128 - code if code < 0 else code
 
-# keep track of all jobs
-_jobs: list[Job] = []
 
 def all_jobs() -> list[Job]:
     return _jobs
@@ -63,6 +130,7 @@ def add_job(pgid: int, pids: list[int], cmdline: str, background: bool = False) 
         num, pgid, [Proc(pid) for pid in pids], cmdline, background=background
     )
 
+    touch(job)
     _jobs.append(job)
     return job
 
@@ -131,10 +199,11 @@ def wait_for_job(job: Job) -> int:
             # reset shell terminal configuration
             termios.tcsetattr(state.tty_fd, termios.TCSADRAIN, state.terminal_modes)
         except (OSError, termios.error) as e:
-            print(f"mash: warning: could not restore terminal state: {e.strerror}", file=sys.stderr)
+            print(f"mash: warning: could not restore terminal state: {e}", file=sys.stderr)
 
     # standard output if the job was stopped
     if job.is_stopped:
+        touch(job)
         print(f"\n[{job.num}]+ Stopped  {job.cmdline}")
         # leave the job in the table and return standard exit code
         return 128 + signal.SIGTSTP
@@ -148,6 +217,8 @@ JOB_SIGNALS = (
     signal.SIGTSTP,  # when the user presses CTRL+Z
     signal.SIGQUIT   # when the user presses CTRL+\
 )
+
+
 
 def init_job_control():
     if not state.interactive:
