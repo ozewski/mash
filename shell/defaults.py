@@ -1,10 +1,10 @@
 import os
 import re
 import readline
+import signal
 import sys
+import termios
 
-
-from shell.colors import colors
 import shell.jobs
 from shell.state import state
 
@@ -146,15 +146,8 @@ def jobs(*args) -> int:
     # list in job-number order; the markers show recency
     for job in sorted(shell.jobs.all_jobs(), key=lambda j: j.num):
         # the current/previous check matches bash conventions for table display
-        if job is current:
-            marker = "+"
-        elif job is previous:
-            marker = "-"
-        else:
-            marker = " "
-
-        state = "Stopped" if job.is_stopped else "Done" if job.is_done else "Running"
-        print(f"[{job.num}]{marker}  {state:<22}{job.cmdline}")
+        marker = "+" if job is current else "-" if job is previous else " "
+        print(shell.jobs.format_job(job, marker))
 
     return 0
 
@@ -162,25 +155,56 @@ def bg(*args) -> int:
     return 1
 
 def fg(*args) -> int:
-    return 1
-
-def fg(*args) -> int:
-    # TEMPORARY STUB: only resolves the jobspec, so we can test the resolver
     if len(args) > 1:
         print("mash: fg: too many arguments", file=sys.stderr)
         return 1
 
-    arg = args[0] if args else None
-
-    # fg accepts a bare number ("fg 1"), but the resolver only accepts "%1"
-    if arg is not None and arg.isascii() and arg.isdigit():
-        arg = "%" + arg
+    if not state.interactive:
+        # without job control, this command is a no-op
+        print("mash: fg: no job control", file=sys.stderr)
+        return 1
 
     try:
-        job = shell.jobs.resolve_jobspec(arg)
+        # try to resolve the desired job
+        job = shell.jobs.resolve_jobspec(args[0] if args else None)
     except shell.jobs.JobSpecError as e:
         print(f"mash: fg: {e}", file=sys.stderr)
         return 1
 
-    print(f"resolved -> [{job.num}] {job.cmdline} (pgid {job.pgid})")
-    return 0
+    print(job.cmdline)
+
+    try:
+        # give control to the process
+        os.tcsetpgrp(state.tty_fd, job.pgid)
+        if job.terminal_modes:
+            # if the process had some special terminal settings, apply them
+            termios.tcsetattr(state.tty_fd, termios.TCSADRAIN, job.terminal_modes)
+
+    except (OSError, termios.error):
+        # in case of an error, make sure to give back control to the terminal
+        print(f"mash: fg: could not give terminal to job: {e}", file=sys.stderr)
+        try:
+            os.tcsetpgrp(state.tty_fd, state.shell_pgid)
+        except OSError:
+            # even taking back the terminal could fail,
+            # but there's nothing we could do about it at this point
+            pass
+        return 1
+
+    job.background = False
+
+    for proc in job.procs:
+        if proc.state == "stopped":
+            proc.state = "running"
+
+    try:
+        # send a signal to the process to wake itself up
+        os.killpg(job.pgid, signal.SIGCONT)
+    except ProcessLookupError:
+        # the internet says this could happen in rare circumstances where the whole group
+        # is already done; in this case, update state accordingly
+        for proc in job.procs:
+            if proc.state == "running":
+                proc.state = "done"
+    
+    return shell.jobs.wait_for_job(job)

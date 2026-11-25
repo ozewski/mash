@@ -57,16 +57,19 @@ _jobs: list[Job] = []
 _job_seq = 0
 
 def resolve_jobspec(arg: str | None) -> Job:
+    if arg and arg.isascii() and arg.isdigit():
+        arg = "+" + arg
+
     if arg in [None, "%", "%%", "%+"]:
         current, _ = current_and_previous()
         if current is None:
-            raise JobSpecError("no current job")
+            raise JobSpecError("current: no such job")
         return current
 
     elif arg == "%-":
         _, previous = current_and_previous()
         if previous is None:
-            raise JobSpecError("no previous job")
+            raise JobSpecError("previous: no such job")
         return previous
 
     elif arg and arg[0] == "%":
@@ -101,7 +104,18 @@ def resolve_jobspec(arg: str | None) -> Job:
 
     else:
         # reject anything else
-        raise JobSpecError(f"{arg}: invalid spec")
+        raise JobSpecError(f"{arg}: invalid job spec")
+
+def job_state(job: Job) -> str:
+    if job.is_stopped:
+        return "Stopped"
+    if job.is_done:
+        return "Done"
+    return "Running"
+
+def format_job(job: Job, marker: str = " ") -> str:
+    # marker: "+" (current), "-" (previous), or " "
+    return f"[{job.num}]{marker}  {job_state(job):<22}{job.cmdline}"
 
 def current_and_previous() -> tuple[Job | None, Job | None]:
     ordered = sorted(_jobs, key=lambda j: j.last_active, reverse=True)
@@ -118,7 +132,6 @@ def wait_status(status: int):
     # normalizes exit status to a positive integer
     code = os.waitstatus_to_exitcode(status)
     return 128 - code if code < 0 else code
-
 
 def all_jobs() -> list[Job]:
     return _jobs
@@ -204,7 +217,8 @@ def wait_for_job(job: Job) -> int:
     # standard output if the job was stopped
     if job.is_stopped:
         touch(job)
-        print(f"\n[{job.num}]+ Stopped  {job.cmdline}")
+        # a just-stopped job is always "current" (+)
+        print(f"\n{format_job(job, '+')}")
         # leave the job in the table and return standard exit code
         return 128 + signal.SIGTSTP
 
