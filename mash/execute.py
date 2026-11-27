@@ -2,7 +2,7 @@ import os
 import signal
 import sys
 
-import mash.defaults
+import mash.builtins
 import mash.jobs
 from mash.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
 from mash.state import state
@@ -15,14 +15,14 @@ Some notes about job control:
 """
 
 DEFAULT_COMMANDS = {
-    "cd": mash.defaults.cd,
-    "exit": mash.defaults.exit,
-    "export": mash.defaults.export,
-    "history": mash.defaults.history,
-    "jobs": mash.defaults.jobs,
-    "fg": mash.defaults.fg,
-    "bg": mash.defaults.bg,
-    "kill": mash.defaults.kill
+    "cd": mash.builtins.cd,
+    "exit": mash.builtins.exit,
+    "export": mash.builtins.export,
+    "history": mash.builtins.history,
+    "jobs": mash.builtins.jobs,
+    "fg": mash.builtins.fg,
+    "bg": mash.builtins.bg,
+    "kill": mash.builtins.kill
 }
 
 def _close_all(fds: list[int]) -> None:
