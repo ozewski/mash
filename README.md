@@ -1,4 +1,4 @@
-# <img src="assets/icon.svg" alt="Project Logo" width="32"> MASH: Minimal Application Shell
+# <img src="assets/icon.svg" alt="Project Logo" height="36"> MASH: Minimal Application Shell
 
 A minimal shell implemented in Python, loosely based on Bash.
 
