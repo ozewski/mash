@@ -2,10 +2,10 @@ import os
 import signal
 import sys
 
-import shell.defaults
-import shell.jobs
-from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
-from shell.state import state
+import mash.defaults
+import mash.jobs
+from mash.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp, Redirection
+from mash.state import state
 
 """
 Some notes about job control:
@@ -15,14 +15,14 @@ Some notes about job control:
 """
 
 DEFAULT_COMMANDS = {
-    "cd": shell.defaults.cd,
-    "exit": shell.defaults.exit,
-    "export": shell.defaults.export,
-    "history": shell.defaults.history,
-    "jobs": shell.defaults.jobs,
-    "fg": shell.defaults.fg,
-    "bg": shell.defaults.bg,
-    "kill": shell.defaults.kill
+    "cd": mash.defaults.cd,
+    "exit": mash.defaults.exit,
+    "export": mash.defaults.export,
+    "history": mash.defaults.history,
+    "jobs": mash.defaults.jobs,
+    "fg": mash.defaults.fg,
+    "bg": mash.defaults.bg,
+    "kill": mash.defaults.kill
 }
 
 def _close_all(fds: list[int]) -> None:
@@ -114,7 +114,7 @@ def run_in_child(
 
             
 
-            for sig in shell.jobs.JOB_SIGNALS:
+            for sig in mash.jobs.JOB_SIGNALS:
                 # resume processing for all relevant signals in the child
                 signal.signal(sig, signal.SIG_DFL)
 
@@ -240,7 +240,7 @@ def execute_pipeline(pipeline: Pipeline, cmdline: str) -> int:
         raise pipeline_error or ExecutionError("no processes started")
 
     # create new shell job
-    job = shell.jobs.add_job(pgid, pids, cmdline)
+    job = mash.jobs.add_job(pgid, pids, cmdline)
 
     if state.interactive:
         # attempt to give the foreground to the job
@@ -250,7 +250,7 @@ def execute_pipeline(pipeline: Pipeline, cmdline: str) -> int:
             print(f"mash: warning: could not give terminal to job: {e.strerror}", file=sys.stderr)
 
     # wait for the job to finish or get stopped
-    status = shell.jobs.wait_for_job(job)
+    status = mash.jobs.wait_for_job(job)
 
     if pipeline_error:
        raise pipeline_error

@@ -5,15 +5,13 @@ import readline
 import sys
 import os
 
-from pprint import pprint
-
-from shell.cli import get_prompt
-from shell.colors import colors
-from shell.execute import execute_pipeline, ExecutionError
-from shell.history import init_history
-from shell.jobs import init_job_control, reap_jobs
-from shell.parser import parse_command, ParseError
-from shell.state import state
+from mash.cli import get_prompt
+from mash.colors import colors
+from mash.execute import execute_pipeline, ExecutionError
+from mash.history import init_history
+from mash.jobs import init_job_control, reap_jobs
+from mash.parser import parse_command, ParseError
+from mash.state import state
 
 VERSION = "0.1.0"
 

@@ -5,8 +5,8 @@ import signal
 import sys
 import termios
 
-import shell.jobs
-from shell.state import state
+import mash.jobs
+from mash.state import state
 
 # All defaults should return a status number.
 
@@ -140,19 +140,19 @@ def history(*args) -> int:
 
 def jobs(*args) -> int:
     # run job reap first thing so we have updated job table
-    shell.jobs.reap_jobs()
+    mash.jobs.reap_jobs()
 
     if args:
         print("mash: jobs: arguments not supported", file=sys.stderr)
         return 1
 
-    current, previous = shell.jobs.current_and_previous()
+    current, previous = mash.jobs.current_and_previous()
 
     # list in job-number order; the markers show recency
-    for job in sorted(shell.jobs.all_jobs(), key=lambda j: j.num):
+    for job in sorted(mash.jobs.all_jobs(), key=lambda j: j.num):
         # the current/previous check matches bash conventions for table display
-        marker = shell.jobs.job_marker(job, current, previous)
-        print(shell.jobs.format_job(job, marker))
+        marker = mash.jobs.job_marker(job, current, previous)
+        print(mash.jobs.format_job(job, marker))
 
     return 0
 
@@ -168,8 +168,8 @@ def fg(*args) -> int:
 
     try:
         # try to resolve the desired job
-        job = shell.jobs.resolve_jobspec(args[0] if args else None)
-    except shell.jobs.JobSpecError as e:
+        job = mash.jobs.resolve_jobspec(args[0] if args else None)
+    except mash.jobs.JobSpecError as e:
         print(f"mash: fg: {e}", file=sys.stderr)
         return 1
 
@@ -209,7 +209,7 @@ def fg(*args) -> int:
             if proc.state == "running":
                 proc.state = "done"
     
-    return shell.jobs.wait_for_job(job)
+    return mash.jobs.wait_for_job(job)
 
 def bg(*args) -> int:
     if not state.interactive:
@@ -227,8 +227,8 @@ def bg(*args) -> int:
     for target in targets:
         try:
             # try to resolve the desired job
-            job = shell.jobs.resolve_jobspec(target)
-        except shell.jobs.JobSpecError as e:
+            job = mash.jobs.resolve_jobspec(target)
+        except mash.jobs.JobSpecError as e:
             print(f"mash: bg: {e}", file=sys.stderr)
             status = 1
             continue
@@ -244,11 +244,11 @@ def bg(*args) -> int:
             if proc.state == "stopped":
                 proc.state = "running"
 
-        shell.jobs.touch(job)
+        mash.jobs.touch(job)
 
         # marker computed after touch(), so the job just resumed is current
-        current, previous = shell.jobs.current_and_previous()
-        marker = shell.jobs.job_marker(job, current, previous)
+        current, previous = mash.jobs.current_and_previous()
+        marker = mash.jobs.job_marker(job, current, previous)
         print(f"[{job.num}]{marker} {job.cmdline} &", flush=True)
 
         try:
@@ -361,8 +361,8 @@ def kill(*args) -> int:
 
             try:
                 # try to resolve the job
-                job = shell.jobs.resolve_jobspec(target)
-            except shell.jobs.JobSpecError as e:
+                job = mash.jobs.resolve_jobspec(target)
+            except mash.jobs.JobSpecError as e:
                 print(f"mash: kill: {e}", file=sys.stderr)
                 status = 1
                 continue

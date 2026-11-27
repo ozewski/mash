@@ -4,7 +4,7 @@ import sys
 import termios
 from dataclasses import dataclass
 
-from shell.state import state
+from mash.state import state
 
 """
 Notes about job control:
@@ -173,24 +173,6 @@ def add_job(pgid: int, pids: list[int], cmdline: str, background: bool = False) 
 def remove_job(job: Job):
     if job in _jobs:
         _jobs.remove(job)
-
-def find_job(id: str | int | None) -> Job | None:
-    # pass either the "%1" format, 1, or None (to get most recent job)
-    if not _jobs:
-        return None
-    if id is None:
-        # return most recent job
-        return _jobs[-1]
-
-    if isinstance(id, int):
-        num = id
-    else:
-        try:
-            num = int(id.lstrip("%"))
-        except ValueError:
-            return None
-    
-    return next((j for j in _jobs if j.num == num), None)
 
 def find_proc(pid: int) -> tuple[Job | None, Proc | None]:
     # attempt to locate a process and its associated job

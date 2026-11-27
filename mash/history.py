@@ -3,7 +3,7 @@ import os
 import readline
 import sys
 
-from shell.state import state
+from mash.state import state
 
 HISTFILE = os.environ.get("HISTFILE", os.path.expanduser("~/.mash_history"))
 HISTSIZE = 1000

@@ -2,7 +2,7 @@ import os
 import pwd
 import socket
 
-from shell.colors import colors
+from mash.colors import colors
 
 def get_username() -> str:
     return pwd.getpwuid(os.getuid()).pw_name

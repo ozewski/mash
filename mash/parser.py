@@ -1,6 +1,6 @@
 import shlex
 
-from shell.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp
+from mash.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp
 
 """
 General rules for parsing symbols:

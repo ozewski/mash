@@ -1,6 +1,6 @@
 # MASH: Minimal Application Shell
 
-A minimal shell implemented in Python.
+A minimal shell implemented in Python, loosely based on Bash.
 
 ## Installation
 
@@ -12,15 +12,20 @@ python3 mash/run.py
 ```
 
 ## Features
-* Executing programs with arguments
-* Certain shell builtins (cd, exit, export?, history?)
-* I/O redirection (< and >)
-* Pipes
-* Background execution
+* Dynamically-sized prompt
+* Executing system programs with arguments
 * Command history
-* Job control (CTRL+C at least, maybe CTRL+Z, fg, bg)
+* I/O redirection
+* Pipelines
+* Certain shell builtins supported:
+    * `cd`, `exit`, `export`, `history`
+* Job control
+    * CTRL+Z to put jobs in the background
+    * Commands supported: `jobs`, `fg`, `bg`, `kill`
 
 Known issues:
+* Shell variables are not supported.
+* Pipelines cannot be created with built-in commands, such as `cd` and `history`.
 * `run.py` is not executable on Linux.
 
 This shell was created as my final project for COSC 519 (Operating Systems) at Towson University, under the direction of Dr. Nicholas Phillips.
