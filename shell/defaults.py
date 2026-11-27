@@ -84,7 +84,9 @@ def export(*args) -> int:
     # set as many of the variables as possible. therefore, we track the status and
     # report it at the end.
 
-    for arg in args:
+    processed_args = args[1:] if args[0] == "-p" else args
+
+    for arg in processed_args:
         varname, sep, value = arg.partition("=")
 
         if not VARNAME.fullmatch(varname):
@@ -118,7 +120,7 @@ def history(*args) -> int:
     if args:
         # expecting numeric argument
         n = args[0]
-        if not n.isdigit():
+        if not (n.isdigit() and n.isascii()):
             print(f"mash: history: {args[0]}: numeric argument required", file=sys.stderr)
             return 1
         
@@ -137,6 +139,9 @@ def history(*args) -> int:
     return 0
 
 def jobs(*args) -> int:
+    # run job reap first thing so we have updated job table
+    shell.jobs.reap_jobs()
+
     if args:
         print("mash: jobs: arguments not supported", file=sys.stderr)
         return 1
@@ -146,7 +151,7 @@ def jobs(*args) -> int:
     # list in job-number order; the markers show recency
     for job in sorted(shell.jobs.all_jobs(), key=lambda j: j.num):
         # the current/previous check matches bash conventions for table display
-        marker = "+" if job is current else "-" if job is previous else " "
+        marker = shell.jobs.job_marker(job, current, previous)
         print(shell.jobs.format_job(job, marker))
 
     return 0
@@ -168,7 +173,7 @@ def fg(*args) -> int:
         print(f"mash: fg: {e}", file=sys.stderr)
         return 1
 
-    print(job.cmdline)
+    print(job.cmdline, flush=True)
 
     try:
         # give control to the process
@@ -177,7 +182,7 @@ def fg(*args) -> int:
             # if the process had some special terminal settings, apply them
             termios.tcsetattr(state.tty_fd, termios.TCSADRAIN, job.terminal_modes)
 
-    except (OSError, termios.error):
+    except (OSError, termios.error) as e:
         # in case of an error, make sure to give back control to the terminal
         print(f"mash: fg: could not give terminal to job: {e}", file=sys.stderr)
         try:
@@ -228,7 +233,7 @@ def bg(*args) -> int:
             status = 1
             continue
 
-        if job.is_stopped:
+        if not job.is_stopped:
             # this job is already in the background
             print(f"mash: bg: job {job.num} already in background", file=sys.stderr)
             status = 1
@@ -236,12 +241,15 @@ def bg(*args) -> int:
 
         job.background = True
         for proc in job.procs:
-            proc.state = "running"
+            if proc.state == "stopped":
+                proc.state = "running"
 
-        # why do we touch here?
         shell.jobs.touch(job)
 
-        # what do we print here?
+        # marker computed after touch(), so the job just resumed is current
+        current, previous = shell.jobs.current_and_previous()
+        marker = shell.jobs.job_marker(job, current, previous)
+        print(f"[{job.num}]{marker} {job.cmdline} &", flush=True)
 
         try:
             # send a signal to the process to wake itself up
@@ -259,9 +267,9 @@ SKIP_WAKEUP = (
     signal.Signals["SIGKILL"], # since it already kills stopped processes
     signal.Signals["SIGCONT"], # since it already wakes the job
     signal.Signals["SIGSTOP"], # since the user wants it to stay stopped
-    signal.Signals["SIGTSTP"],
-    signal.Signals["SIGTTIN"],
-    signal.Signals["SIGTTOU"],
+    signal.Signals["SIGTSTP"], # ^
+    signal.Signals["SIGTTIN"], # ^
+    signal.Signals["SIGTTOU"], # ^
 )
 
 KILL_USAGE = "kill [-s sigspec | -sigspec] pid | jobspec ... or kill -l [sigspec]"
@@ -313,17 +321,18 @@ def kill(*args) -> int:
             try:
                 sig = signal.Signals(n)
             except ValueError:
-                print(f"mash: kill: {sig_query}: invalid signal", file=sys.stderr)
+                print(f"mash: kill: {sig_query}: invalid signal specification", file=sys.stderr)
                 return 1
 
         else:
             # kill -SIGPIPE or kill -PIPE
             sig_query = sig_query.upper()
-            if not sig_query.startswith("SIG"):
-                sig_query = "SIG" + sig_query
+            query = sig_query
+            if not query.startswith("SIG"):
+                query = "SIG" + query
             
             try:
-                sig = signal.Signals[sig_query]
+                sig = signal.Signals[query]
             except KeyError:
                 print(f"mash: kill: {sig_query}: invalid signal", file=sys.stderr)
                 return 1
@@ -364,7 +373,7 @@ def kill(*args) -> int:
                 # attempt to send the signal to the job
                 os.killpg(job.pgid, sig)
             except OSError as e:
-                print(f"mash: kill: {e}", file=sys.stderr)
+                print(f"mash: kill: {target}: {e.strerror}", file=sys.stderr)
                 status = 1
                 continue
 
@@ -396,8 +405,11 @@ def kill(*args) -> int:
             try:
                 os.kill(pid, sig)
 
-            except OSError as e:
-                print(f"mash: kill: ({pid}) - {e.strerror}", file=sys.stderr)
+            except (OSError, OverflowError) as e:
+                # we can get an overflow error if int works for Python but
+                # it's too large to be converted to a C int
+                reason = e.strerror if isinstance(e, OSError) else "No such process"
+                print(f"mash: kill: ({pid}) - {reason}", file=sys.stderr)
                 status = 1
                 continue
 

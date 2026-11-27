@@ -132,6 +132,10 @@ def job_state(job: Job) -> str:
     
     return "Running"
 
+def job_marker(job: Job, current: Job | None, previous: Job | None) -> str:
+    # "+" for the current job, "-" for the previous one, " " otherwise
+    return "+" if job is current else "-" if job is previous else " "
+
 def format_job(job: Job, marker: str = " ") -> str:
     # marker: "+" (current), "-" (previous), or " "
     return f"[{job.num}]{marker}  {job_state(job):<22}{job.cmdline}"
@@ -248,7 +252,8 @@ JOB_SIGNALS = (
     signal.SIGTTOU,  # when a bg process group attempts to change terminal settings
     signal.SIGTTIN,  # when a bg process groups tries to read from the terminal
     signal.SIGTSTP,  # when the user presses CTRL+Z
-    signal.SIGQUIT   # when the user presses CTRL+\
+    signal.SIGQUIT,  # when the user presses CTRL+\
+    signal.SIGTERM   # when a process is terminated using the kill command
 )
 
 def init_job_control():
@@ -350,8 +355,7 @@ def reap_jobs():
         if job.is_done:
             # whole job has exited
             # announce it, then drop it from the table
-            marker = "+" if job is current else "-" if job is previous else " "
-            print(format_job(job, marker))
+            print(format_job(job, job_marker(job, current, previous)))
             remove_job(job)
 
         elif job.is_stopped:

@@ -89,8 +89,9 @@ def run_in_child(
     # runs in the newly created child process after a fork
     # will never return
     try:
-        # must restore SIGPIPE for the child, since python disables it
+        # must restore SIGPIPE and SIGINT for the child, since python disables them
         signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
 
         # perform terminal handoff (job control)
         if state.interactive:
@@ -111,13 +112,9 @@ def run_in_child(
                 # don't care about any issue
                 pass
 
-            for sig in (
-                signal.SIGINT, 
-                signal.SIGQUIT, 
-                signal.SIGTSTP,
-                signal.SIGTTIN, 
-                signal.SIGTTOU
-            ):
+            
+
+            for sig in shell.jobs.JOB_SIGNALS:
                 # resume processing for all relevant signals in the child
                 signal.signal(sig, signal.SIG_DFL)
 

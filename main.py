@@ -55,11 +55,13 @@ try:
 
             if pipeline:
                 try:
-                    execute_pipeline(pipeline, command)
+                    status = execute_pipeline(pipeline, command)
                 except ExecutionError as e:
                     print(f"mash: execution error: {e}", file=sys.stderr)
                 if state.exit_requested:
-                    break
+                    # the user ran exit <n>
+                    # so exit the shell with that status
+                    sys.exit(status)
 
         except Exception as e:
             print(f"mash: unexpected error: {e}", file=sys.stderr)
