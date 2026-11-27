@@ -5,6 +5,7 @@ import readline
 import sys
 import os
 
+from mash import python_version_check, VERSION
 from mash.cli import get_prompt
 from mash.colors import colors
 from mash.execute import execute_pipeline, ExecutionError
@@ -13,7 +14,7 @@ from mash.jobs import init_job_control, reap_jobs
 from mash.parser import parse_command, ParseError
 from mash.state import state
 
-VERSION = "0.1.0"
+python_version_check()
 
 init_history()
 init_job_control()

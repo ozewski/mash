@@ -5,6 +5,10 @@ import platform
 import subprocess
 import sys
 
+from mash import python_version_check
+
+python_version_check()
+
 def main():
     args = sys.argv[1:]
     script_dir = os.path.dirname(os.path.abspath(__file__))
