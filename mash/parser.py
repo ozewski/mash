@@ -1,4 +1,5 @@
 import shlex
+from os.path import expanduser
 
 from mash.command import Command, FdDuplication, FileRedirection, Pipeline, RedirectOp
 
@@ -133,6 +134,10 @@ def parse(tokens: list[str]) -> Pipeline:
 
         else:
             # all other valid tokens
+            if token.startswith("~"):
+                # we want to do tilde expansion in the parser
+                token = expanduser(token)
+
             command.args.append(token)
 
             i += 1

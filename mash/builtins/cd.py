@@ -10,6 +10,7 @@ def _run_cd(path) -> int:
         return 1
     
     os.environ["OLDPWD"] = saved_pwd
+    os.environ["PWD"] = os.getcwd()
     return 0
 
 def cd(*args) -> int:

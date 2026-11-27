@@ -31,6 +31,10 @@ def _save_history() -> None:
         return
     
     try:
-        readline.append_history_file(new, HISTFILE)
+        if hasattr(readline, "append_history_file"):
+            # append not always available on Mac
+            readline.append_history_file(new, HISTFILE)
+        else:
+            readline.write_history_file(HISTFILE)
     except OSError as e:
         print(f"mash: warning: could not write {HISTFILE}: {e.strerror}", file=sys.stderr)

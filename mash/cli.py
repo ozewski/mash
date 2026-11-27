@@ -31,6 +31,10 @@ def get_abbreviated_cwd(max_length: int) -> str:
 
     return cwd
 
+def _np(code: str) -> str:
+    # wrap an escape code so readline doesn't count it toward prompt width
+    return f"\001{code}\002"
+
 def get_prompt() -> str:
     username = get_username()
     hostname = get_hostname()
@@ -42,4 +46,6 @@ def get_prompt() -> str:
 
     cwd = get_abbreviated_cwd(max_cwd_length)
 
-    return f"{colors.CYAN}{username}{colors.RESET}@{colors.YELLOW}{hostname}{colors.RESET} {colors.BRIGHT_BLACK}{cwd}{colors.RESET}> "
+    return (f"{_np(colors.CYAN)}{username}{_np(colors.RESET)}@"
+            f"{_np(colors.YELLOW)}{hostname}{_np(colors.RESET)} "
+            f"{_np(colors.BRIGHT_BLACK)}{cwd}{_np(colors.RESET)}> ")

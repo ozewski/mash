@@ -58,7 +58,7 @@ _job_seq = 0
 
 def resolve_jobspec(arg: str | None) -> Job:
     if arg and arg.isascii() and arg.isdigit():
-        arg = "+" + arg
+        arg = "%" + arg
 
     if arg in [None, "%", "%%", "%+"]:
         current, _ = current_and_previous()
