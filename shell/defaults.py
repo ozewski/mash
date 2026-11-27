@@ -219,10 +219,10 @@ def bg(*args) -> int:
     # using exit status tracker to allow one jobspec to be backgrounded even if another fails
     status = 0
 
-    for target in target:
+    for target in targets:
         try:
             # try to resolve the desired job
-            job = shell.jobs.resolve_jobspec(args[0] if args else None)
+            job = shell.jobs.resolve_jobspec(target)
         except shell.jobs.JobSpecError as e:
             print(f"mash: bg: {e}", file=sys.stderr)
             status = 1
@@ -254,21 +254,35 @@ def bg(*args) -> int:
         
     return status
 
+# for these signals, wakeup after kill is skipped
+SKIP_WAKEUP = (
+    signal.Signals["SIGKILL"], # since it already kills stopped processes
+    signal.Signals["SIGCONT"], # since it already wakes the job
+    signal.Signals["SIGSTOP"], # since the user wants it to stay stopped
+    signal.Signals["SIGTSTP"],
+    signal.Signals["SIGTTIN"],
+    signal.Signals["SIGTTOU"],
+)
+
+KILL_USAGE = "kill [-s sigspec | -sigspec] pid | jobspec ... or kill -l [sigspec]"
+
 def kill(*args) -> int:
     if not args:
-        print("mash: kill: not enough arguments", file=sys.stderr)
+        print(f"mash: kill: usage: {KILL_USAGE}", file=sys.stderr)
         return 1
 
     sig = None
+    sig_query = ""
+    targets_start = 0
 
     if args[0] == "-l":
-        if len(args) > 1 and args[1].isascii() and args[1].isnumeric():
+        if len(args) > 1 and args[1].isascii() and args[1].isdigit():
             val = int(args[1])
-            if val in signal.Signals:
+            try:
                 name = signal.Signals(val).name[3:]
                 print(name)
                 return 0
-            else:
+            except ValueError:
                 print(f"mash: kill: {args[1]}: invalid signal", file=sys.stderr)
                 return 1
         else:
@@ -277,33 +291,120 @@ def kill(*args) -> int:
             return 0
 
     elif args[0].startswith("-"):
+        # need to parse out what kind of query it is
         if args[0] == "-s":
             if len(args) < 2:
-                print(f"mash: kill: -s: not enough arguments", file=sys.stderr)
+                print(f"mash: kill: -s: missing argument", file=sys.stderr)
                 return 1
             
-            sig = args[1]
+            sig_query = args[1]
+            targets_start = 2
         else:
-            sig = args[0][1:]
+            sig_query = args[0][1:]
+            targets_start = 1
 
-        if sig == "":
+        if sig_query == "":
             print(f"mash: kill: invalid syntax", file=sys.stderr)
             return 1
 
-        if sig.isascii() and sig.isnumeric():
-            n = int(sig)
-            if n in signal.Signals:
-                sig = signal.Signals(n).name
-            else:
-                print(f"mash: kill: {sig}: invalid signal", file=sys.stderr)
+        elif sig_query.isascii() and sig_query.isdigit():
+            # kill -9 ...
+            n = int(sig_query)
+            try:
+                sig = signal.Signals(n)
+            except ValueError:
+                print(f"mash: kill: {sig_query}: invalid signal", file=sys.stderr)
                 return 1
 
-        sig = sig.upper()
-        if not sig.startswith("SIG"):
-            sig = "SIG" + sig
+        else:
+            # kill -SIGPIPE or kill -PIPE
+            sig_query = sig_query.upper()
+            if not sig_query.startswith("SIG"):
+                sig_query = "SIG" + sig_query
+            
+            try:
+                sig = signal.Signals[sig_query]
+            except KeyError:
+                print(f"mash: kill: {sig_query}: invalid signal", file=sys.stderr)
+                return 1
 
     else:
-        # default
-        sig = "SIGTERM"
+        # default: use SIGTERM
+        sig = signal.Signals["SIGTERM"]
 
-    return 1
+    targets = args[targets_start:]
+    status = 0
+
+    if not targets:
+        # they didn't pass any targets, so just print usage
+        print(f"mash: kill: usage: {KILL_USAGE}", file=sys.stderr)
+        return 1
+
+    # at this point, we know the signal and all the targets that we need to send the signal to
+
+    for target in targets:
+        if target.startswith("%"):
+            # this is a JOB target
+            if not state.interactive:
+                print(f"mash: kill: {target}: no job control", file=sys.stderr)
+                status = 1
+                continue
+
+            try:
+                # try to resolve the job
+                job = shell.jobs.resolve_jobspec(target)
+            except shell.jobs.JobSpecError as e:
+                print(f"mash: kill: {e}", file=sys.stderr)
+                status = 1
+                continue
+
+            was_stopped = job.is_stopped
+
+            try:
+                # attempt to send the signal to the job
+                os.killpg(job.pgid, sig)
+            except OSError as e:
+                print(f"mash: kill: {e}", file=sys.stderr)
+                status = 1
+                continue
+
+            # user-requested SIGCONT counts as being resumed too
+            resumed = (sig == signal.SIGCONT)
+              
+            if was_stopped and sig not in SKIP_WAKEUP:
+                # attempt to wake up job so that signal can be executed
+                try:
+                    os.killpg(job.pgid, signal.SIGCONT)
+                    resumed = True
+                except OSError:
+                    # group may already be gone: that's not a failure
+                    pass
+
+            if resumed and was_stopped:
+                # update our local process state if we did wake up the job
+                for proc in job.procs:
+                    if proc.state == "stopped":
+                        proc.state = "running"
+                # ...but it didn't get the terminal, so it's background
+                job.background = True
+
+            # if the job dies, it will be marked by the "reaping sweep" at the next prompt
+        
+        elif target.isascii() and target.isdigit():
+            # this is a bare PID target
+            pid = int(target)
+            try:
+                os.kill(pid, sig)
+
+            except OSError as e:
+                print(f"mash: kill: ({pid}) - {e.strerror}", file=sys.stderr)
+                status = 1
+                continue
+
+        else:
+            # not a job spec or a PID
+            print(f"mash: kill: {target}: arguments must be process or job IDs", file=sys.stderr)
+            status = 1
+            continue
+
+    return status
