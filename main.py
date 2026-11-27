@@ -1,9 +1,10 @@
+#!/usr/bin/env python3
+
 import platform
 import readline
 import sys
 import os
 
-from datetime import datetime, timezone
 from pprint import pprint
 
 from shell.cli import get_prompt
@@ -22,7 +23,6 @@ init_job_control()
 if "MASH_CWD_MAX" not in os.environ:
     os.environ["MASH_CWD_MAX"] = "20"
 
-utc_now = datetime.now(timezone.utc)
 using_wsl = "wsl" in platform.release().lower()
 
 print(f"\nmash: minimal application shell [v{VERSION}]")
